@@ -118,6 +118,37 @@ const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u03
 const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 let tt;function toast(m){const t=$$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400)}
 
+/* ---------- baza ogólna (wartości przybliżone na 100 g: kcal, B, T, W, cukry, błonnik) ---------- */
+const GENERIC=[
+['Pomidor',18,0.9,0.2,3.9,2.6,1.2],['Pomidorki koktajlowe',18,0.9,0.2,3.9,2.6,1.2],['Pomidory krojone (puszka)',21,1.2,0.2,4,2.5,1],['Koncentrat pomidorowy',82,4.3,0.5,19,12,4.1],
+['Ogórek',15,0.7,0.1,3.6,1.7,0.5],['Ogórek kiszony',12,0.6,0.2,2.3,1.2,1],['Papryka czerwona',31,1,0.3,6,4.2,2.1],['Papryka zielona',20,0.9,0.2,4.6,2.4,1.7],
+['Marchew',41,0.9,0.2,9.6,4.7,2.8],['Cebula',40,1.1,0.1,9.3,4.2,1.7],['Czosnek',149,6.4,0.5,33,1,2.1],['Ziemniaki (surowe)',77,2,0.1,17,0.8,2.2],['Ziemniaki gotowane',87,1.9,0.1,20,0.9,1.8],
+['Batat',86,1.6,0.1,20,4.2,3],['Brokuł',34,2.8,0.4,6.6,1.7,2.6],['Kalafior',25,1.9,0.3,5,1.9,2],['Szpinak',23,2.9,0.4,3.6,0.4,2.2],['Sałata',15,1.4,0.2,2.9,0.8,1.3],['Rukola',25,2.6,0.7,3.7,2.1,1.6],
+['Kapusta biała',25,1.3,0.1,5.8,3.2,2.5],['Kapusta kiszona',19,0.9,0.1,4.3,1.8,2.9],['Cukinia',17,1.2,0.3,3.1,2.5,1],['Bakłażan',25,1,0.2,5.9,3.5,3],['Pieczarki',22,3.1,0.3,3.3,2,1],
+['Burak',43,1.6,0.2,9.6,6.8,2.8],['Kukurydza konserwowa',82,2.9,1.2,15,4.5,2],['Groszek zielony',81,5.4,0.4,14.5,5.7,5.1],['Fasolka szparagowa',31,1.8,0.2,7,3.3,2.7],['Awokado',160,2,14.7,8.5,0.7,6.7],
+['Seler naciowy',16,0.7,0.2,3,1.3,1.6],['Por',61,1.5,0.3,14,3.9,1.8],['Rzodkiewka',16,0.7,0.1,3.4,1.9,1.6],['Dynia',26,1,0.1,6.5,2.8,0.5],
+['Jabłko',52,0.3,0.2,14,10.4,2.4],['Banan',89,1.1,0.3,23,12.2,2.6],['Pomarańcza',47,0.9,0.1,12,9.4,2.4],['Mandarynka',53,0.8,0.3,13,10.6,1.8],['Gruszka',57,0.4,0.1,15,9.8,3.1],
+['Truskawki',32,0.7,0.3,7.7,4.9,2],['Borówki',57,0.7,0.3,14,10,2.4],['Maliny',52,1.2,0.7,12,4.4,6.5],['Winogrona',69,0.7,0.2,18,15.5,0.9],['Kiwi',61,1.1,0.5,15,9,3],['Cytryna',29,1.1,0.3,9.3,2.5,2.8],
+['Arbuz',30,0.6,0.2,7.6,6.2,0.4],['Mango',60,0.8,0.4,15,13.7,1.6],['Ananas',50,0.5,0.1,13,9.9,1.4],['Śliwki',46,0.7,0.3,11.4,9.9,1.4],['Daktyle suszone',282,2.5,0.4,75,63,8],['Rodzynki',299,3.1,0.5,79,59,3.7],
+['Płatki owsiane',379,13.2,6.5,67.7,1,10.1],['Ryż biały (suchy)',360,6.6,0.6,79,0.1,1],['Ryż biały gotowany',130,2.7,0.3,28,0.1,0.4],['Ryż brązowy (suchy)',362,7.5,2.7,76,0.8,3.4],
+['Kasza gryczana (sucha)',346,11.7,2.7,75,0,10.3],['Kasza jaglana (sucha)',378,11,4.2,73,'',8.5],['Kasza bulgur (sucha)',342,12.3,1.3,76,0.4,12.5],['Kuskus (suchy)',376,12.8,0.6,77,'',5],['Komosa ryżowa (sucha)',368,14.1,6.1,64,'',7],
+['Makaron pszenny (suchy)',371,13,1.5,75,2.7,3.2],['Makaron gotowany',158,5.8,0.9,31,0.6,1.8],['Chleb pszenny',265,9,3.2,49,5,2.7],['Chleb żytni pełnoziarnisty',250,8.5,3.1,47.5,'',6.5],
+['Bułka pszenna',280,9,3,55,4,2.5],['Tortilla pszenna',306,8.2,8,50.6,3,3],['Mąka pszenna',364,10.3,1,76,0.3,2.7],['Wafle ryżowe',387,8.2,2.8,81,0.9,4.2],
+['Jajko kurze',143,12.6,9.5,0.7,0.4,0],['Białko jaja',52,10.9,0.2,0.7,0.7,0],['Mleko 1,5%',47,3.3,1.5,4.9,4.9,0],['Mleko 2%',50,3.3,2,4.8,4.8,0],['Mleko 3,2%',61,3.2,3.2,4.8,4.8,0],
+['Skyr naturalny',63,11,0.2,4,4,0],['Jogurt naturalny 2%',60,4.3,2,6,6,0],['Jogurt typu greckiego 10%',125,3.5,10,4.5,4.5,0],['Kefir 2%',50,3.4,2,4.7,4.7,0],
+['Twaróg chudy',99,19.8,0.5,3.5,3.5,0],['Twaróg półtłusty',133,18.7,4.7,3.7,3.7,0],['Serek wiejski',97,11,5,2,2,0],['Ser żółty gouda',356,25,27.4,2.2,2.2,0],['Mozzarella',254,18,19,2,1,0],
+['Feta',264,14.2,21.3,4.1,4.1,0],['Parmezan',392,35.8,25.8,3.2,0.8,0],['Masło',740,0.7,82,0.6,0.6,0],['Śmietana 18%',186,2.5,18,3.6,3.6,0],
+['Tofu naturalne',144,17.3,8.7,2.8,'',2.3],['Soczewica czerwona (sucha)',352,24.6,1.1,63,2,10.7],['Soczewica gotowana',116,9,0.4,20,1.8,7.9],['Ciecierzyca (sucha)',378,20.5,6,63,10.7,12.2],
+['Ciecierzyca gotowana / z puszki',164,8.9,2.6,27.4,4.8,7.6],['Fasola biała gotowana',140,8.2,0.6,26,'',10.5],['Fasola czerwona gotowana',127,8.7,0.5,22.8,0.3,6.4],
+['Gluten pszenny (seitan, proszek)',370,75,1.9,14,0,0.6],['Edamame',121,11.9,5.2,8.9,2.2,5.2],['Hummus',166,7.9,9.6,14.3,0.3,6],['Napój sojowy bez cukru',35,3.3,1.8,1.2,0.6,0.5],
+['Łosoś świeży',208,20,13.4,0,0,0],['Dorsz',82,17.8,0.7,0,0,0],['Mintaj',92,19.4,1,0,0,0],['Makrela świeża',205,18.6,13.9,0,0,0],['Śledź świeży',158,18,9,0,0,0],
+['Tuńczyk w sosie własnym',116,25.5,0.8,0,0,0],['Krewetki',85,20.1,0.5,0,0,0],['Pierś z kurczaka',120,22.5,2.6,0,0,0],
+['Oliwa z oliwek',884,0,100,0,0,0],['Olej rzepakowy',884,0,100,0,0,0],['Masło orzechowe',588,25,50,20,9.2,6],['Orzechy włoskie',654,15.2,65.2,13.7,2.6,6.7],['Migdały',579,21.2,49.9,21.6,4.4,12.5],
+['Orzechy nerkowca',553,18.2,43.8,30.2,5.9,3.3],['Pestki dyni',559,30.2,49,10.7,1.4,6],['Nasiona chia',486,16.5,30.7,42.1,0,34.4],['Siemię lniane',534,18.3,42.2,28.9,1.6,27.3],['Słonecznik',584,20.8,51.5,20,2.6,8.6],
+['Miód',304,0.3,0,82.4,82.1,0.2],['Cukier',400,0,0,100,100,0],['Czekolada gorzka 70%',598,7.8,42.6,45.9,24,10.9],['Kakao naturalne',228,19.6,13.7,57.9,1.8,37],['Odżywka białkowa serwatkowa',390,75,6,9,6,0],
+['Kawa czarna',2,0.1,0,0,0,0],['Herbata',1,0,0,0.2,0,0],['Sok pomarańczowy',45,0.7,0.2,10.4,8.4,0.2],['Ketchup',101,1,0.1,27,22,0.3],['Majonez',700,1.2,77,1.5,1,0]];
+const GEN=GENERIC.map(([n,k,b,t,w,c,f])=>({id:'g-'+norm(n).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),kod:'',nazwa:n,marka:'',kcal:k,bialko:b,tluszcz:t,nasycone:'',wegle:w,cukry:c,blonnik:f,sol:'',zrodlo:'baza ogólna'}));
+
 const PORY=['Śniadanie','II śniadanie','Obiad','Podwieczorek','Kolacja','Przekąska'];
 function guessPora(hm){const [h,m]=hm.split(':').map(Number);const t=h+m/60;
   if(t<4)return 'Przekąska';if(t<10)return 'Śniadanie';if(t<12)return 'II śniadanie';if(t<15.5)return 'Obiad';if(t<17.5)return 'Podwieczorek';if(t<21.5)return 'Kolacja';return 'Przekąska'}
@@ -213,17 +244,20 @@ function openPicker({mode,onPick}){
     <div id="list"></div>
     <div class="row2" style="margin-top:12px"><button class="btn ghost" id="newP">+ Nowy produkt</button>${mode==='entry'?'<button class="btn ghost" id="newD">+ Nowe danie</button>':''}</div>`,{full:true});
   const q=$(ov,'#q'),list=$(ov,'#list');
-  const pick=it=>{ov.close();onPick(it)};
-  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...(mode==='entry'?db.dania.map(d=>asItem(d,'danie')):[])];
+  const pick=it=>{ensureProduct(it);ov.close();onPick(it)};
+  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'?db.dania.map(d=>asItem(d,'danie')):[])];
+  const sub=it=>it.typ==='danie'?'Danie':it.zrodlo==='baza ogólna'?'Baza ogólna (przybliżone)':esc(it.marka||'Mój produkt');
   function render(){const s=norm(q.value).trim();let items,head='';
     if(!s){items=recent.map(r=>findItem(r.typ,r.id)).filter(it=>it&&(mode==='entry'||it.typ==='produkt'));
       head=items.length?'<div class="lbl">Ostatnio używane</div>':'<p class="muted">Zacznij pisać albo zeskanuj kod kreskowy.</p>'}
     else{const w=s.split(/\s+/);items=pool().filter(it=>{const h=norm(it.nazwa+' '+(it.marka||''));return w.every(x=>h.includes(x))})
-      .sort((a,b)=>(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||a.nazwa.localeCompare(b.nazwa,'pl'));
-      head=items.length?'':'<p class="muted">Brak wyników – dodaj nowy produkt albo zeskanuj kod.</p>'}
+      .sort((a,b)=>(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
+      head=items.length?'':'<p class="muted">Brak w twojej bazie i bazie ogólnej.</p>'}
     items=items.slice(0,40);
-    list.innerHTML=head+items.map((it,i)=>`<button class="item" data-i="${i}"><span class="nm"><b>${esc(it.nazwa)}</b><small>${it.typ==='danie'?'Danie':esc(it.marka||'Produkt')}</small></span><span class="k">${Math.round(per100(it).kcal)} kcal/100 g</span></button>`).join('');
-    list.querySelectorAll('.item').forEach(b=>b.onclick=()=>pick(items[+b.dataset.i]))}
+    list.innerHTML=head+items.map((it,i)=>`<button class="item" data-i="${i}"><span class="nm"><b>${esc(it.nazwa)}</b><small>${sub(it)}</small></span><span class="k">${Math.round(per100(it).kcal)} kcal/100 g</span></button>`).join('')
+      +(s?`<button class="btn ghost" id="offBtn" style="width:100%;margin-top:6px">🔎 Szukaj „${esc(q.value.trim())}” w Open Food Facts</button><div id="offRes"></div>`:'');
+    list.querySelectorAll('.item').forEach(b=>b.onclick=()=>pick(items[+b.dataset.i]));
+    const ob=$(list,'#offBtn');if(ob)ob.onclick=()=>offSearch(q.value.trim(),$(list,'#offRes'),pick)}
   q.oninput=render;render();
   $(ov,'#scan').onclick=()=>openScanner(code=>handleCode(code,pick));
   $(ov,'#newP').onclick=()=>productForm({nazwa:q.value.trim()},pick);
@@ -245,6 +279,22 @@ function openScanner(onCode){
   sc.start({facingMode:'environment'},{fps:12,qrbox:(w,h)=>({width:Math.floor(Math.min(w*.85,320)),height:Math.floor(Math.min(h*.45,150))})},t=>finish(String(t).trim()),()=>{})
     .catch(()=>{$(ov,'#reader').innerHTML='<p class="muted c" style="color:#ccc;padding:40px 16px">Brak dostępu do aparatu – zezwól w przeglądarce albo wpisz kod ręcznie.</p>'});
 }
+function ensureProduct(it){
+  if(it&&it.typ==='produkt'&&!prodIdx.has(String(it.id))){const p={...it};delete p.typ;p.dodano=isoNow();db.produkty.push(p);saveDb();enqueue('addProduct',p)}
+  return it}
+function offToPre(pr,code){const n=pr.nutriments||{};
+  let kcal=n['energy-kcal_100g'];if(kcal==null&&n['energy_100g']!=null)kcal=n['energy_100g']/4.184;
+  return{kod:code||pr.code||'',nazwa:pr.product_name_pl||pr.product_name||'',marka:(pr.brands||'').split(',')[0].trim(),
+    kcal,bialko:n.proteins_100g,tluszcz:n.fat_100g,nasycone:n['saturated-fat_100g'],wegle:n.carbohydrates_100g,cukry:n.sugars_100g,blonnik:n.fiber_100g,sol:n.salt_100g,zrodlo:'OFF'}}
+async function offSearch(term,box,cb){
+  box.innerHTML='<p class="muted c">Szukam w Open Food Facts…</p>';
+  try{const r=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(term)}&search_simple=1&action=process&json=1&page_size=25&lc=pl&cc=pl&fields=code,product_name,product_name_pl,brands,nutriments`);
+    const j=await r.json();
+    const ps=(j.products||[]).filter(p=>(p.product_name_pl||p.product_name)&&p.nutriments&&(p.nutriments['energy-kcal_100g']!=null||p.nutriments['energy_100g']!=null));
+    if(!ps.length){box.innerHTML='<p class="muted c">Nic nie znaleziono. Dodaj nowy produkt ręcznie.</p>';return}
+    box.innerHTML='<div class="lbl">Open Food Facts</div>'+ps.map((p,i)=>{const pre=offToPre(p);return `<button class="item" data-o="${i}"><span class="nm"><b>${esc(pre.nazwa)}</b><small>${esc(pre.marka||'—')}</small></span><span class="k">${Math.round(num(pre.kcal))} kcal/100 g</span></button>`}).join('');
+    box.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>productForm(offToPre(ps[+b.dataset.o]),cb))}
+  catch{box.innerHTML='<p class="muted c">Nie udało się połączyć z Open Food Facts. Spróbuj za chwilę.</p>'}}
 async function handleCode(code,cb){
   const p=db.produkty.find(x=>String(x.kod)===code);
   if(p)return cb(asItem(p,'produkt'));
@@ -252,10 +302,7 @@ async function handleCode(code,cb){
   let pre={kod:code};
   try{const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_pl,brands,nutriments`);
     const j=await r.json();
-    if(j.status===1&&j.product){const n=j.product.nutriments||{};
-      let kcal=n['energy-kcal_100g'];if(kcal==null&&n['energy_100g']!=null)kcal=n['energy_100g']/4.184;
-      pre={kod:code,nazwa:j.product.product_name_pl||j.product.product_name||'',marka:(j.product.brands||'').split(',')[0].trim(),
-        kcal,bialko:n.proteins_100g,tluszcz:n.fat_100g,nasycone:n['saturated-fat_100g'],wegle:n.carbohydrates_100g,cukry:n.sugars_100g,blonnik:n.fiber_100g,sol:n.salt_100g,zrodlo:'OFF'};
+    if(j.status===1&&j.product){pre=offToPre(j.product,code);
       toast('Znaleziono – sprawdź dane z etykietą')}
     else toast('Brak w bazie – przepisz wartości z etykiety')}
   catch{toast('Nie udało się połączyć z bazą – wpisz ręcznie')}
