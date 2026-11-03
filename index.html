@@ -329,7 +329,7 @@ function renderDay(){
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum"><div class="kcal">${Math.round(T.kcal)} <small>kcal</small></div><div class="mac"><div><b class="cB">${r1(T.b)}</b>B</div><div><b class="cT">${r1(T.t)}</b>T</div><div><b class="cW">${r1(T.w)}</b>W</div></div>
     <div class="sum2"><span class="fib">Błonnik <b>${X('blonnik')}</b> g</span><span>Cukry <b>${X('cukry')}</b> g</span><span>Sól <b>${X('sol')}</b> g</span></div>
-    <div class="sum2"><span class="wat">Płyny <b>${fl(S('plyn_ml'))}</b> l</span><span>Woda łącznie <b>≈${fl(S('woda_g'))}</b> l</span>${S('alkohol_g')>0?`<span>Alkohol <b>${fv(S('alkohol_g'))}</b> g</span>`:''}</div>${goalHTML(celeCache[curDate],{...T,wd:S('woda_g')})}</div>`;
+    <div class="sum2"><span class="wat">Woda łącznie <b>${fl(S('woda_g'))}</b> l</span><span>w tym płyny <b>${fl(S('plyn_ml'))}</b> l</span>${S('alkohol_g')>0?`<span>Alkohol <b>${fv(S('alkohol_g'))}</b> g</span>`:''}</div>${goalHTML(celeCache[curDate],{...T,wd:S('woda_g')})}</div>`;
   const pory=[...PORY,...new Set(list.map(e=>e.pora).filter(p=>!PORY.includes(p)))];
   $$('#meals').innerHTML=pory.map(p=>{const es=list.filter(e=>e.pora===p),n=es.length,c=n&&isCollapsed(p),S=sum(es);
     const ts=[...new Set(es.map(e=>String(e.godzina)))].sort(),tm=ts.length>1?ts[0]+'–'+ts[ts.length-1]:(ts[0]||'');
