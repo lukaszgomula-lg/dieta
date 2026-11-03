@@ -8,8 +8,8 @@ const TOKEN = 'ZMIEN-NA-SWOJE-HASLO';
 
 const SCHEMA = {
   Produkty: {
-    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa'],
-    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa']
+    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa', 'odpowiednik'],
+    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa', 'odpowiednik']
   },
   Dania: {
     cols: ['id', 'nazwa', 'porcje', 'waga_g', 'dodano'],
@@ -20,8 +20,15 @@ const SCHEMA = {
     text: ['danie_id', 'produkt_id']
   },
   Dziennik: {
-    cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono'],
-    text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono']
+    cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono',
+      'nasycone', 'cukry', 'blonnik', 'sol',
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo'],
+    text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo']
+  },
+  /* jeden wiersz na dzień: zamkniety = TAK, gdy wszystkie posiłki są wpisane */
+  Dni: {
+    cols: ['data', 'zamkniety', 'zamknieto'],
+    text: ['data', 'zamkniety', 'zamknieto']
   }
 };
 
@@ -51,7 +58,8 @@ function doGet(e) {
       return { produkty: rows_('Produkty'), dania: rows_('Dania'), skladniki: rows_('Skladniki_dan') };
     }
     if (p.action === 'day') {
-      return { entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }) };
+      const dz = rows_('Dni').filter(function (r) { return r.data === p.date; })[0] || null;
+      return { v: 2, entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }), dzien: dz };
     }
     throw new Error('Nieznana akcja');
   });
@@ -75,6 +83,11 @@ function doPost(e) {
           break;
         case 'addEntry':
         case 'updateEntry': upsert_('Dziennik', d); break;
+        case 'setDay': {
+          const r = findRow_('Dni', d.data);
+          if (r > 0) writeRow_('Dni', r, d); else append_('Dni', d);
+          break;
+        }
         case 'deleteEntry': {
           const r = findRow_('Dziennik', d.id);
           if (r > 0) sheet_('Dziennik').deleteRow(r);
