@@ -8,7 +8,8 @@ const TOKEN = 'ZMIEN-NA-SWOJE-HASLO';
 
 const SCHEMA = {
   Produkty: {
-    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa', 'odpowiednik'],
+    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa', 'odpowiednik',
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'jod_ug'],
     text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa', 'odpowiednik']
   },
   Dania: {
@@ -22,7 +23,7 @@ const SCHEMA = {
   Dziennik: {
     cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono',
       'nasycone', 'cukry', 'blonnik', 'sol',
-      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo'],
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug'],
     text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo']
   },
   /* jeden wiersz na dzień: zamkniety = TAK, gdy wszystkie posiłki są wpisane */

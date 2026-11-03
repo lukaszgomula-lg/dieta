@@ -45,6 +45,7 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 .ck{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 6px;color:var(--fg);font-size:15px}
 input[type=checkbox]{display:inline-block;width:22px;height:22px;margin:0;padding:0;flex:none;accent-color:var(--acc)}
 .btn:disabled{opacity:.45}
+summary{cursor:pointer}
 .hint{text-align:center;color:var(--mut);font-size:14px;margin-top:6px;min-height:20px}
 .add-s{color:var(--acc);font-size:26px}
 .entry{display:flex;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 16px;gap:10px;align-items:center}
@@ -167,12 +168,14 @@ const PORCJE={'Bułka pszenna':[80,'1 bułka'],'Chleb pszenny':[35,'1 kromka'],'
 'Skyr naturalny':[150,'1 kubek'],'Serek wiejski':[200,'1 opakowanie'],'Ser żółty gouda':[15,'1 plaster'],'Mozzarella':[125,'1 kulka'],'Masło':[5,'1 łyżeczka'],'Oliwa z oliwek':[10,'1 łyżka'],'Olej rzepakowy':[10,'1 łyżka'],
 'Masło orzechowe':[15,'1 łyżka'],'Miód':[12,'1 łyżeczka'],'Cukier':[5,'1 łyżeczka'],'Kakao naturalne':[5,'1 łyżeczka'],'Nasiona chia':[12,'1 łyżka'],'Siemię lniane':[10,'1 łyżka'],
 'Odżywka białkowa serwatkowa':[30,'1 miarka'],'Kawa czarna':[250,'1 kubek'],'Herbata':[250,'1 kubek']};
-const MK=['wit_d_ug','b12_ug','zelazo_mg','wapn_mg','magnez_mg','cynk_mg','potas_mg','foliany_ug','epa_dha_mg'];
+const MK_USDA=['wit_d_ug','b12_ug','zelazo_mg','wapn_mg','magnez_mg','cynk_mg','potas_mg','foliany_ug','epa_dha_mg'];
+const MK=[...MK_USDA,'jod_ug'];
+const MK_LBL={wit_d_ug:'Wit. D (µg)',b12_ug:'Wit. B12 (µg)',zelazo_mg:'Żelazo (mg)',wapn_mg:'Wapń (mg)',magnez_mg:'Magnez (mg)',cynk_mg:'Cynk (mg)',potas_mg:'Potas (mg)',foliany_ug:'Foliany (µg)',epa_dha_mg:'EPA+DHA (mg)',jod_ug:'Jod (µg)'};
 const NUT=['kcal','bialko','tluszcz','nasycone','wegle','cukry','blonnik','sol'];
 const ALLK=[...NUT,...MK];
 const GEN=GENERIC.map(([n,k,b,t,w,c,f])=>{const m=MIKRO[n];
   const o={id:'g-'+norm(n).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),kod:'',nazwa:n,marka:'',kcal:k,bialko:b,tluszcz:t,nasycone:m&&m[10]!=null?m[10]:'',wegle:w,cukry:c,blonnik:f,sol:m&&m[11]!=null?m[11]:'',zrodlo:'baza ogólna',porcja_g:PORCJE[n]?PORCJE[n][0]:'',porcja_nazwa:PORCJE[n]?PORCJE[n][1]:''};
-  if(m){o.usda=m[0];MK.forEach((key,i)=>o[key]=m[i+1]==null?'':m[i+1])}
+  if(m){o.usda=m[0];MK_USDA.forEach((key,i)=>o[key]=m[i+1]==null?'':m[i+1])}
   return o});
 const GEN_BY_ID=new Map(GEN.map(g=>[g.id,g]));
 function suggestOdp(name){const n=norm(name);let best=null;
@@ -212,8 +215,10 @@ function per100(it){
     t._mz=n?`danie: mikro dla ${nm}/${n} składników`:'';return t}
   const self=GEN_BY_ID.get(String(it.id))||null,src=microSrc(it),o={};
   NUT.forEach(k=>{const v=val(it[k]);o[k]=v!=null?v:(self?val(self[k]):null)});
-  MK.forEach(k=>o[k]=src?val(src[k]):null);
-  o._mz=src?(src===self?`USDA SR28 #${src.usda}`:`USDA SR28 #${src.usda} (odpowiednik: ${src.nazwa})`):'';
+  let own=0;
+  MK.forEach(k=>{const v=val(it[k]),sv=src?val(src[k]):null;if(v!=null&&!(self&&v===val(self[k]))){o[k]=v;own++}else o[k]=sv});
+  const us=src?(src===self?`USDA SR28 #${src.usda}`:`USDA SR28 #${src.usda} (odpowiednik: ${src.nazwa})`):'';
+  o._mz=own?('własne ('+own+')'+(us?' + '+us:'')):us;
   return o}
 const rk=(k,v)=>v==null?null:k==='kcal'?Math.round(v):Math.round(v*100)/100;
 const calc=(p,g)=>{const o={};ALLK.forEach(k=>o[k]=p[k]==null?null:rk(k,p[k]*g/100));o._mz=p._mz||'';return o};
@@ -273,7 +278,7 @@ function renderDay(){
   const list=(dayCache[curDate]||[]).slice().sort((a,b)=>String(a.godzina).localeCompare(String(b.godzina)));
   const sum=es=>es.reduce((a,e)=>({kcal:a.kcal+num(e.kcal),b:a.b+num(e.bialko),t:a.t+num(e.tluszcz),w:a.w+num(e.wegle)}),{kcal:0,b:0,t:0,w:0});
   const T=sum(list);
-  const X=k=>{let s=0,miss=0;list.forEach(e=>{const v=val(e[k]);if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
+  const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum"><div class="kcal">${Math.round(T.kcal)} <small>kcal</small></div><div class="mac"><div><b class="cB">${r1(T.b)}</b>B</div><div><b class="cT">${r1(T.t)}</b>T</div><div><b class="cW">${r1(T.w)}</b>W</div></div>
     <div class="sum2"><span class="fib">Błonnik <b>${X('blonnik')}</b> g</span><span>Cukry <b>${X('cukry')}</b> g</span><span>Sól <b>${X('sol')}</b> g</span></div></div>`;
   const pory=[...PORY,...new Set(list.map(e=>e.pora).filter(p=>!PORY.includes(p)))];
@@ -391,7 +396,7 @@ function openScanner(onCode){
     .catch(()=>{$(ov,'#reader').innerHTML='<p class="muted c" style="color:#ccc;padding:40px 16px">Brak dostępu do aparatu – zezwól w przeglądarce albo wpisz kod ręcznie.</p>'});
 }
 function ensureProduct(it){
-  if(it&&it.typ==='produkt'&&!prodIdx.has(String(it.id))){const p={...it};delete p.typ;p.dodano=isoNow();db.produkty.push(p);saveDb();enqueue('addProduct',p)}
+  if(it&&it.typ==='produkt'&&!prodIdx.has(String(it.id))){const p={...it};delete p.typ;delete p.usda;MK.forEach(k=>delete p[k]);p.dodano=isoNow();db.produkty.push(p);saveDb();enqueue('addProduct',p)}
   return it}
 function offToPre(pr,code){const n=pr.nutriments||{};
   let kcal=n['energy-kcal_100g'];if(kcal==null&&n['energy_100g']!=null)kcal=n['energy_100g']/4.184;
@@ -425,6 +430,8 @@ function productForm(pre,cb,{edit=false}={}){
   const F=[['kcal','Kalorie (kcal) *'],['bialko','Białko (g)'],['tluszcz','Tłuszcz (g)'],['nasycone','w tym nasycone (g)'],['wegle','Węglowodany (g)'],['cukry','w tym cukry (g)'],['blonnik','Błonnik (g)'],['sol','Sól (g)']];
   const v=k=>pre[k]==null||pre[k]===''?'':r1(num(pre[k]));
   const isGen=String(pre.id||'').startsWith('g-');
+  const selfG=GEN_BY_ID.get(String(pre.id||''));
+  const ownMk=k=>{const x=val(pre[k]);return x==null||(selfG&&x===val(selfG[k]))?'':x};
   let odp=isGen?'':(pre.odpowiednik||(edit?'':suggestOdp(pre.nazwa||'')));
   const ov=sheet(edit?'Edytuj produkt':'Nowy produkt',`
     ${pre.zrodlo==='OFF'&&!edit?'<p class="muted">Dane z Open Food Facts – porównaj z etykietą.</p>':''}
@@ -437,8 +444,12 @@ function productForm(pre,cb,{edit=false}={}){
     <div class="lbl">Witaminy i minerały</div>
     ${isGen?'<p class="muted">Z tabel składu żywności USDA (SR28).</p>'
       :'<button class="item" id="odp"><span class="nm"><b id="odpN"></b><small>Odpowiednik z tabel USDA – z niego liczone są witaminy i minerały</small></span><span class="k">Zmień</span></button>'}
+    <details id="mk"${MK.some(k=>ownMk(k)!=='')?' open':''}><summary class="muted" style="padding:8px 0">Wpisz własne wartości na 100 g (opcjonalnie)</summary>
+      <p class="muted" style="margin:0">Puste pole = wartość z tabel USDA (podpowiedź w polu).</p>
+      <div class="grid2">${MK.map(k=>`<label>${MK_LBL[k]}<input id="m_${k}" inputmode="decimal" value="${ownMk(k)}"></label>`).join('')}</div></details>
     <button class="btn primary big" id="ok">${edit?'Zapisz zmiany':'Zapisz produkt'}</button>`,{full:true});
-  const showOdp=()=>{const n=$(ov,'#odpN');if(n){const g=GEN_BY_ID.get(odp);n.textContent=g?g.nazwa:'Brak – stuknij, aby wybrać'}};
+  const showOdp=()=>{const n=$(ov,'#odpN');const g=isGen?selfG:GEN_BY_ID.get(odp);if(n)n.textContent=g?g.nazwa:'Brak – stuknij, aby wybrać';
+    MK.forEach(k=>{const i=$(ov,'#m_'+k);if(i){const v=g?val(g[k]):null;i.placeholder=v==null?'brak danych':'USDA: '+fv(v)}})};
   let odpTouched=!!pre.odpowiednik;
   const ob=$(ov,'#odp');if(ob)ob.onclick=()=>genericPicker(id=>{odp=id;odpTouched=true;showOdp()});
   $(ov,'#nazwa').addEventListener('input',e=>{if(!odpTouched&&!isGen){odp=suggestOdp(e.target.value);showOdp()}});
@@ -450,6 +461,7 @@ function productForm(pre,cb,{edit=false}={}){
     Object.assign(p,{kod:$(ov,'#kod').value.trim(),nazwa,marka:$(ov,'#marka').value.trim()});
     F.forEach(([k])=>{const x=$(ov,'#f_'+k).value.trim();p[k]=x===''?'':num(x)});
     p.odpowiednik=odp||'';
+    MK.forEach(k=>{const x=$(ov,'#m_'+k).value.trim();p[k]=x===''?'':num(x)});
     const pg=num($(ov,'#pg').value);p.porcja_g=pg>0?r1(pg):'';p.porcja_nazwa=pg>0?($(ov,'#pn').value.trim()||'1 porcja'):'';
     const i=db.produkty.findIndex(x=>String(x.id)===String(p.id));if(i>=0)db.produkty[i]=p;else db.produkty.push(p);
     saveDb();enqueue('addProduct',p);ov.close();toast(edit?'Produkt zaktualizowany':'Produkt zapisany');cb&&cb(asItem(p,'produkt'))}
