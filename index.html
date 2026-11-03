@@ -35,6 +35,15 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 .mac{display:flex;gap:14px;font-size:12px;color:var(--mut);text-align:center}
 .mac b{display:block;font-size:16px}
 .cB{color:var(--b)}.cT{color:var(--t)}.cW{color:var(--w)}
+.goal{width:100%;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);display:grid;gap:9px}
+.goal-h{display:flex;justify-content:space-between;font-size:12px;color:var(--mut)}
+.gr{display:grid;grid-template-columns:62px 1fr auto;align-items:center;gap:10px;font-size:13px}
+.gr .nm{color:var(--mut)}.gr .v{font-variant-numeric:tabular-nums;white-space:nowrap}.gr .v b{color:var(--fg)}
+.bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:99px;transition:width .3s}
+.g-lo i{background:#2563eb}.g-ok i{background:#16a34a}.g-hi i{background:#dc2626}
+.g-lo .v b{color:#2563eb}.g-ok .v b{color:#16a34a}.g-hi .v b{color:#dc2626}
+@media (prefers-color-scheme:dark){.g-lo i{background:#60a5fa}.g-ok i{background:#4ade80}.g-hi i{background:#f87171}.g-lo .v b{color:#60a5fa}.g-ok .v b{color:#4ade80}.g-hi .v b{color:#f87171}}
 .meal{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
 .meal-h{display:flex;align-items:center;padding:4px 6px 4px 10px;gap:2px}
 .meal-t{flex:1;display:flex;align-items:center;gap:8px;background:none;border:0;text-align:left;padding:8px 4px;min-width:0;border-radius:10px}
@@ -249,6 +258,7 @@ async function flush(){if(flushing||!cfg.url)return;flushing=true;
 
 async function refreshDb(){
   const j=await apiGet({action:'init'});
+  storeCele(j.cele);
   const P=j.produkty.map(p=>({...p,id:String(p.id),kod:String(p.kod??'')}));
   const D=j.dania.map(d=>({...d,id:String(d.id),porcje:num(d.porcje)||1}));
   const S=j.skladniki.map(s=>({danie_id:String(s.danie_id),produkt_id:String(s.produkt_id),gramy:num(s.gramy)}));
@@ -264,7 +274,7 @@ async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
   try{const j=await apiGet({action:'day',date:d});
     let list=j.entries.map(e=>({...e,id:String(e.id),godzina:String(e.godzina),ilosc_g:num(e.ilosc_g),kcal:num(e.kcal),bialko:num(e.bialko),tluszcz:num(e.tluszcz),wegle:num(e.wegle)}));
     dayCache[d]=applyQueue(list,d);saveDays();
-    if(j.v>=2){let dz=j.dzien||null;queue.forEach(op=>{if(op.action==='setDay'&&op.data.data===d)dz=op.data});dniCache[d]=dz;LS.set('dni',dniCache);backfill(d)}
+    if(j.v>=3){storeCele(j.cele);if(j.cel)storeCele([j.cel])}if(j.v>=2){let dz=j.dzien||null;queue.forEach(op=>{if(op.action==='setDay'&&op.data.data===d)dz=op.data});dniCache[d]=dz;LS.set('dni',dniCache);backfill(d)}
     if(d===curDate)renderDay()}catch(e){lastErr=e.message}}
 /* uzupełnia brakujące wartości (błonnik, cukry, sól, mikro) w starszych wpisach */
 function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.typ,e.ref_id);const g=num(e.ilosc_g);if(!it||!(g>0))return;
@@ -272,10 +282,21 @@ function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.t
   ALLK.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
   if(ch){if(!u.mikro_zrodlo)u.mikro_zrodlo=m._mz;upsertLocal(u);enqueue('updateEntry',u)}})}
 let dniCache=LS.get('dni',{});
+let celeCache=LS.get('cele',{});
+function storeCele(arr){if(!Array.isArray(arr))return;arr.forEach(c=>{if(c&&c.data)celeCache[String(c.data)]=c});LS.set('cele',celeCache)}
 function setDayClosed(d,closed){const o={data:d,zamkniety:closed?'TAK':'',zamknieto:closed?isoNow():''};dniCache[d]=o;LS.set('dni',dniCache);enqueue('setDay',o);renderDay();toast(closed?'Dzień zamknięty ✓':'Dzień otwarty')}
 function upsertLocal(e){for(const d in dayCache)dayCache[d]=dayCache[d].filter(x=>x.id!==e.id);(dayCache[e.data]=dayCache[e.data]||[]).push(e);saveDays()}
 function deleteLocal(id){for(const d in dayCache)dayCache[d]=dayCache[d].filter(x=>x.id!==id);saveDays()}
 function pushRecent(typ,id){recent=recent.filter(r=>!(r.typ===typ&&r.id===id));recent.unshift({typ,id});recent=recent.slice(0,25);LS.set('recent',recent)}
+
+/* ---------- cele dnia (ustala trener) ---------- */
+/* niebieski: za mało, zielony: w normie, czerwony: przekroczone. Kcal: 93–105%, makro: 90–110% */
+function goalHTML(c,T){if(!c||!(num(c.kcal)>0))return'';
+  const R=[['Kalorie','kcal',T.kcal,'',.93,1.05],['Białko','bialko',T.b,' g',.9,1.1],['Tłuszcz','tluszcz',T.t,' g',.9,1.1],['Węglow.','wegle',T.w,' g',.9,1.1]];
+  const rows=R.filter(r=>num(c[r[1]])>0).map(([n,k,v,u,lo,hi])=>{const g=num(c[k]),p=v/g,cl=p<lo?'g-lo':p>hi?'g-hi':'g-ok';
+    return `<div class="gr ${cl}"><span class="nm">${n}</span><span class="bar"><i style="width:${Math.min(100,Math.round(p*100))}%"></i></span><span class="v"><b>${Math.round(v)}</b> / ${Math.round(g)}${u}</span></div>`}).join('');
+  const typ=c.typ_dnia?esc(String(c.typ_dnia)):'',uw=c.uwaga?' · '+esc(String(c.uwaga)):'';
+  return `<div class="goal"><div class="goal-h"><span>Cel dnia${typ?' · '+typ:''}${uw}</span></div>${rows}</div>`}
 
 /* ---------- widok dnia ---------- */
 function renderDay(){
@@ -290,7 +311,7 @@ function renderDay(){
   const T=sum(list);
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum"><div class="kcal">${Math.round(T.kcal)} <small>kcal</small></div><div class="mac"><div><b class="cB">${r1(T.b)}</b>B</div><div><b class="cT">${r1(T.t)}</b>T</div><div><b class="cW">${r1(T.w)}</b>W</div></div>
-    <div class="sum2"><span class="fib">Błonnik <b>${X('blonnik')}</b> g</span><span>Cukry <b>${X('cukry')}</b> g</span><span>Sól <b>${X('sol')}</b> g</span></div></div>`;
+    <div class="sum2"><span class="fib">Błonnik <b>${X('blonnik')}</b> g</span><span>Cukry <b>${X('cukry')}</b> g</span><span>Sól <b>${X('sol')}</b> g</span></div>${goalHTML(celeCache[curDate],T)}</div>`;
   const pory=[...PORY,...new Set(list.map(e=>e.pora).filter(p=>!PORY.includes(p)))];
   $$('#meals').innerHTML=pory.map(p=>{const es=list.filter(e=>e.pora===p),n=es.length,c=n&&isCollapsed(p),S=sum(es);
     const ts=[...new Set(es.map(e=>String(e.godzina)))].sort(),tm=ts.length>1?ts[0]+'–'+ts[ts.length-1]:(ts[0]||'');

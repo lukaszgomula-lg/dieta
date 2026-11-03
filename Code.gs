@@ -30,6 +30,11 @@ const SCHEMA = {
   Dni: {
     cols: ['data', 'zamkniety', 'zamknieto'],
     text: ['data', 'zamkniety', 'zamknieto']
+  },
+  /* cele dzienne – wpisuje trener (Claude); aplikacja tylko czyta */
+  Cele: {
+    cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono'],
+    text: ['data', 'typ_dnia', 'uwaga', 'ustalono']
   }
 };
 
@@ -56,11 +61,12 @@ function doGet(e) {
     const p = e.parameter || {};
     auth_(p.token);
     if (p.action === 'init') {
-      return { produkty: rows_('Produkty'), dania: rows_('Dania'), skladniki: rows_('Skladniki_dan') };
+      return { produkty: rows_('Produkty'), dania: rows_('Dania'), skladniki: rows_('Skladniki_dan'), cele: cele_() };
     }
     if (p.action === 'day') {
       const dz = rows_('Dni').filter(function (r) { return r.data === p.date; })[0] || null;
-      return { v: 2, entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }), dzien: dz };
+      const cel = rows_('Cele').filter(function (r) { return r.data === p.date; })[0] || null;
+      return { v: 3, entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }), dzien: dz, cel: cel, cele: cele_() };
     }
     throw new Error('Nieznana akcja');
   });
@@ -104,6 +110,14 @@ function doPost(e) {
 }
 
 /* ---------- pomocnicze ---------- */
+/** Cele od 7 dni wstecz do 21 dni naprzód – aplikacja trzyma je w pamięci telefonu (praca offline). */
+function cele_() {
+  const tz = Session.getScriptTimeZone(), d = new Date();
+  const od = Utilities.formatDate(new Date(d.getTime() - 7 * 864e5), tz, 'yyyy-MM-dd');
+  const doo = Utilities.formatDate(new Date(d.getTime() + 21 * 864e5), tz, 'yyyy-MM-dd');
+  return rows_('Cele').filter(function (r) { return r.data && r.data >= od && r.data <= doo; });
+}
+
 /** Dopisuje brakujące kolumny (np. po aktualizacji skryptu) bez ruszania danych. */
 function ensureSchema_() {
   const ss = SpreadsheetApp.getActive();
