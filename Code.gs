@@ -8,8 +8,8 @@ const TOKEN = 'ZMIEN-NA-SWOJE-HASLO';
 
 const SCHEMA = {
   Produkty: {
-    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano'],
-    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano']
+    cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa'],
+    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa']
   },
   Dania: {
     cols: ['id', 'nazwa', 'porcje', 'waga_g', 'dodano'],
@@ -90,9 +90,26 @@ function doPost(e) {
 }
 
 /* ---------- pomocnicze ---------- */
+/** Dopisuje brakujące kolumny (np. po aktualizacji skryptu) bez ruszania danych. */
+function ensureSchema_() {
+  const ss = SpreadsheetApp.getActive();
+  Object.keys(SCHEMA).forEach(function (name) {
+    const s = SCHEMA[name];
+    const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    const cur = sh.getRange(1, 1, 1, s.cols.length).getValues()[0];
+    if (cur.join('|') !== s.cols.join('|')) {
+      sh.getRange(1, 1, 1, s.cols.length).setValues([s.cols]).setFontWeight('bold');
+      sh.setFrozenRows(1);
+      s.text.forEach(function (c) {
+        sh.getRange(1, s.cols.indexOf(c) + 1, sh.getMaxRows(), 1).setNumberFormat('@');
+      });
+    }
+  });
+}
+
 function handle_(fn) {
   let out;
-  try { out = fn(); } catch (err) { out = { error: String(err && err.message || err) }; }
+  try { ensureSchema_(); out = fn(); } catch (err) { out = { error: String(err && err.message || err) }; }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 function auth_(t) { if (t !== TOKEN) throw new Error('Zły token'); }
