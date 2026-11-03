@@ -109,7 +109,11 @@ function ensureSchema_() {
   const ss = SpreadsheetApp.getActive();
   Object.keys(SCHEMA).forEach(function (name) {
     const s = SCHEMA[name];
-    const sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    let sh = ss.getSheetByName(name);
+    if (!sh) {
+      try { sh = ss.insertSheet(name); }
+      catch (e) { SpreadsheetApp.flush(); sh = ss.getSheetByName(name); }  /* równoległe zapytanie już utworzyło zakładkę */
+    }
     const cur = sh.getRange(1, 1, 1, s.cols.length).getValues()[0];
     if (cur.join('|') !== s.cols.join('|')) {
       sh.getRange(1, 1, 1, s.cols.length).setValues([s.cols]).setFontWeight('bold');
