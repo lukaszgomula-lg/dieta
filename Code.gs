@@ -9,8 +9,8 @@ const TOKEN = 'ZMIEN-NA-SWOJE-HASLO';
 const SCHEMA = {
   Produkty: {
     cols: ['id', 'kod', 'nazwa', 'marka', 'kcal', 'bialko', 'tluszcz', 'nasycone', 'wegle', 'cukry', 'blonnik', 'sol', 'zrodlo', 'dodano', 'porcja_g', 'porcja_nazwa', 'odpowiednik',
-      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'jod_ug'],
-    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa', 'odpowiednik']
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'jod_ug', 'napoj', 'alkohol_g'],
+    text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa', 'odpowiednik', 'napoj']
   },
   Dania: {
     cols: ['id', 'nazwa', 'porcje', 'waga_g', 'dodano'],
@@ -23,7 +23,7 @@ const SCHEMA = {
   Dziennik: {
     cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono',
       'nasycone', 'cukry', 'blonnik', 'sol',
-      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug'],
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug', 'woda_g', 'plyn_ml', 'alkohol_g'],
     text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo']
   },
   /* jeden wiersz na dzień: zamkniety = TAK, gdy wszystkie posiłki są wpisane */
@@ -33,7 +33,7 @@ const SCHEMA = {
   },
   /* cele dzienne – wpisuje trener (Claude); aplikacja tylko czyta */
   Cele: {
-    cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono'],
+    cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono', 'woda_ml'],
     text: ['data', 'typ_dnia', 'uwaga', 'ustalono']
   }
 };
