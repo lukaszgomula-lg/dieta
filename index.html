@@ -127,7 +127,17 @@ const isoNow=()=>{const d=new Date();return `${ymd(d)} ${pad(d.getHours())}:${pa
 const parseD=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
 const addDays=(s,n)=>{const d=parseD(s);d.setDate(d.getDate()+n);return ymd(d)};
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ł/g,'l');
-const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const LS={get(k,d){try{const v=localStorage.getItem('dieta:'+k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem('dieta:'+k,JSON.stringify(v))}catch{}}};
+/* jednorazowe przeniesienie danych do własnych nazw – aplikacja trening działa pod tym samym adresem */
+(function(){try{
+  if(localStorage.getItem('dieta:moved'))return;
+  ['db','days','recent','collapsed','dni'].forEach(k=>{const v=localStorage.getItem(k);if(v!=null&&localStorage.getItem('dieta:'+k)==null)localStorage.setItem('dieta:'+k,v);localStorage.removeItem(k)});
+  const A=['addProduct','addDish','addEntry','updateEntry','deleteEntry','setDay'];
+  const q=JSON.parse(localStorage.getItem('queue')||'[]');
+  if(Array.isArray(q)){const mine=q.filter(o=>o&&A.includes(o.action)&&!o.sid),rest=q.filter(o=>!(o&&A.includes(o.action)&&!o.sid));
+    localStorage.setItem('dieta:queue',JSON.stringify(mine));localStorage.setItem('queue',JSON.stringify(rest))}
+  localStorage.setItem('dieta:moved','1');
+}catch(e){}})();
 let tt;function toast(m){const t=$$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400)}
 
 /* ---------- baza ogólna (wartości przybliżone na 100 g: kcal, B, T, W, cukry, błonnik) ---------- */
