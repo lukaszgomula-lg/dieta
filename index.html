@@ -291,8 +291,10 @@ async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
 /* uzupełnia brakujące wartości (błonnik, cukry, sól, mikro) w starszych wpisach */
 function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.typ,e.ref_id);const g=num(e.ilosc_g);if(!it||!(g>0))return;
   const m=calc(per100(it),g),u={...e};let ch=false;
-  ALLK.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
-  if(ch){if(!u.mikro_zrodlo)u.mikro_zrodlo=m._mz;upsertLocal(u);enqueue('updateEntry',u)}})}
+  NUT.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
+  /* mikro i płyny zawsze zgodne z aktualnym produktem (np. po oznaczeniu jako napój albo zmianie odpowiednika) */
+  [...MK,...PLYN].forEach(k=>{const cur=val(u[k]),nw=m[k];if(nw==null?cur!=null:(cur==null||Math.abs(cur-nw)>0.011)){u[k]=nw==null?'':nw;ch=true}});
+  if(ch){u.mikro_zrodlo=m._mz||'';upsertLocal(u);enqueue('updateEntry',u)}})}
 let dniCache=LS.get('dni',{});
 let celeCache=LS.get('cele',{});
 function storeCele(arr){if(!Array.isArray(arr))return;arr.forEach(c=>{if(c&&c.data)celeCache[String(c.data)]=c});LS.set('cele',celeCache)}
@@ -321,7 +323,7 @@ function renderDay(){
   const list=(dayCache[curDate]||[]).slice().sort((a,b)=>String(a.godzina).localeCompare(String(b.godzina)));
   const sum=es=>es.reduce((a,e)=>({kcal:a.kcal+num(e.kcal),b:a.b+num(e.bialko),t:a.t+num(e.tluszcz),w:a.w+num(e.wegle)}),{kcal:0,b:0,t:0,w:0});
   const T=sum(list);
-  const S=k=>list.reduce((a,e)=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}return a+(v||0)},0);
+  const S=k=>list.reduce((a,e)=>{let v=PLYN.includes(k)?null:val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k];else v=val(e[k])}return a+(v||0)},0);
   const fl=ml=>String(Math.round(ml/100)/10).replace('.',',');
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum"><div class="kcal">${Math.round(T.kcal)} <small>kcal</small></div><div class="mac"><div><b class="cB">${r1(T.b)}</b>B</div><div><b class="cT">${r1(T.t)}</b>T</div><div><b class="cW">${r1(T.w)}</b>W</div></div>
@@ -562,7 +564,8 @@ function dishForm(cb){
 function entryForm(item,{entry=null,pora=null}={}){
   const edit=!!entry;
   const base=item?per100(item):{...Object.fromEntries(ALLK.map(k=>[k,null])),_mz:''};
-  if(edit&&num(entry.ilosc_g)>0){ALLK.forEach(k=>{const v=val(entry[k]);if(v!=null)base[k]=v*100/num(entry.ilosc_g)});if(entry.mikro_zrodlo)base._mz=entry.mikro_zrodlo}
+  if(edit&&num(entry.ilosc_g)>0){NUT.forEach(k=>{const v=val(entry[k]);if(v!=null)base[k]=v*100/num(entry.ilosc_g)});
+    if(!item){[...MK,...PLYN].forEach(k=>{const v=val(entry[k]);if(v!=null)base[k]=v*100/num(entry.ilosc_g)});base._mz=entry.mikro_zrodlo||''}}
   const typ=edit?entry.typ:item.typ,nazwa=edit?entry.nazwa:item.nazwa;
   const dish=typ==='danie'&&item?item:null;
   const porcja=dish?dishWeight(dish)/(num(dish.porcje)||1):0;
