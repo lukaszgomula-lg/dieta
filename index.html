@@ -61,6 +61,11 @@ summary{cursor:pointer}
 .entry{display:flex;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 16px;gap:10px;align-items:center}
 .entry:active{background:var(--acc2)}
 .entry{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.grp{display:flex;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 16px 12px 10px;gap:8px;align-items:center}
+.grp:active{background:var(--acc2)}.grp .k{font-weight:700}
+.entry.sub{padding-left:38px;background:color-mix(in srgb,var(--acc2) 35%,transparent)}
+.grp-act{display:flex;gap:8px;padding:6px 12px 10px 38px;background:color-mix(in srgb,var(--acc2) 35%,transparent)}
+.grp-act .btn{padding:7px 12px;font-size:13px}
 .nm{flex:1;min-width:0}
 .nm b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nm small{color:var(--mut);font-size:13px}
@@ -222,6 +227,10 @@ let dayCache=LS.get('days',{});
 let recent=LS.get('recent',[]);
 let collapsed=LS.get('collapsed',{});
 const isCollapsed=p=>collapsed[p]!==false;
+let grpOpen=LS.get('grpOpen',{});
+/* dania złożone z wpisów (grupy): nazwa w arkuszu z datą, w aplikacji bez */
+const baseName=n=>String(n||'').replace(/\s*\(\d{1,2}\.\d{1,2}\.\d{2}\)$/,'');
+const dSuffix=d=>{const [y,m,dd]=String(d).split('-');return `${+dd}.${+m}.${String(y).slice(2)}`};
 let curDate=today(), lastErr='';
 let prodIdx=new Map();
 function saveDb(){prodIdx=new Map(db.produkty.map(p=>[String(p.id),p]));LS.set('db',db)}
@@ -314,6 +323,11 @@ function goalHTML(c,T){if(!c||!(num(c.kcal)>0||num(c.woda_ml)>0))return'';
   return `<div class="goal"><div class="goal-h"><span>Cel dnia${typ?' · '+typ:''}${uw}</span></div>${rows}</div>`}
 
 /* ---------- widok dnia ---------- */
+const rowE=(e,cls='')=>`<button class="entry${cls}" data-id="${esc(e.id)}"><span class="nm"><b>${esc(e.nazwa)}</b><small>${r1(num(e.ilosc_g))} g · ${esc(e.godzina)}</small></span><span class="k">${Math.round(num(e.kcal))} kcal</span></button>`;
+function itemsHTML(es){const seen=new Set();return es.map(e=>{const g=e.grupa_id;if(!g)return rowE(e);if(seen.has(g))return'';seen.add(g);
+  const ge=es.filter(x=>x.grupa_id===g),kc=ge.reduce((a,x)=>a+num(x.kcal),0),open=!!grpOpen[g],szt=num(ge[0].grupa_szt),w=ge.reduce((a,x)=>a+num(x.ilosc_g),0);
+  return `<button class="grp" data-g="${esc(g)}"><span class="chev">${open?'▾':'▸'}</span><span class="nm"><b>🍽 ${esc(baseName(ge[0].danie_nazwa))}</b><small>${szt>0?fv(szt)+' szt. · ':''}${ge.length} skł. · ${Math.round(w)} g · ${esc(ge[0].godzina)}</small></span><span class="k">${Math.round(kc)} kcal</span></button>`
+    +(open?ge.map(x=>rowE(x,' sub')).join('')+`<div class="grp-act"><button class="btn ghost" data-gadd="${esc(g)}">+ Składnik</button><button class="btn ghost" data-gedit="${esc(g)}">✎ Danie</button></div>`:'')}).join('')}
 function renderDay(){
   const t=today();
   const lbl=curDate===t?'Dziś':curDate===addDays(t,-1)?'Wczoraj':curDate===addDays(t,1)?'Jutro':parseD(curDate).toLocaleDateString('pl-PL',{weekday:'long'});
@@ -337,7 +351,7 @@ function renderDay(){
       <button class="meal-t" data-tog="${esc(p)}"${n?'':' disabled'}><span class="chev">${n?(c?'▸':'▾'):''}</span><span class="nm"><b>${esc(p)}</b>${n?`<small>${esc(tm)} · ${n} poz. · ${Math.round(S.kcal)} kcal</small>`:''}</span></button>
       ${n?`<button class="icon" data-time="${esc(p)}" aria-label="Godzina posiłku: ${esc(p)}">🕒</button>`:''}
       <button class="icon add-s" data-add="${esc(p)}" aria-label="Dodaj do: ${esc(p)}">+</button></div>
-    ${n&&!c?`<div class="mac-s"><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></div>`+es.map(e=>`<button class="entry" data-id="${esc(e.id)}"><span class="nm"><b>${esc(e.nazwa)}</b><small>${r1(num(e.ilosc_g))} g · ${esc(e.godzina)}</small></span><span class="k">${Math.round(num(e.kcal))} kcal</span></button>`).join(''):''}</section>`}).join('')
+    ${n&&!c?`<div class="mac-s"><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></div>`+itemsHTML(es):''}</section>`}).join('')
     +(list.length>1?'<button class="btn ghost" id="multi" style="width:100%;margin-top:4px">☑ Zaznacz kilka pozycji</button>':'')
     +(curDate<=t?(closed?'<div class="dayc"><span>✓ Dzień zamknięty – wszystko wpisane</span><button class="btn ghost" id="dayTog">Otwórz</button></div>'
       :'<button class="btn" id="dayTog" style="width:100%;margin-top:10px">✓ Zamknij dzień (wszystko wpisane)</button>'):'');
@@ -346,6 +360,10 @@ function renderDay(){
   document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const p=b.dataset.tog;collapsed[p]=!isCollapsed(p);LS.set('collapsed',collapsed);renderDay()});
   document.querySelectorAll('[data-time]').forEach(b=>b.onclick=()=>{const es=list.filter(e=>e.pora===b.dataset.time);batchSheet(es,es.map(e=>e.id),b.dataset.time+' – godzina')});
   const mb=$$('#multi');if(mb)mb.onclick=()=>batchSheet(list,[],'Zaznacz pozycje');
+  document.querySelectorAll('.grp').forEach(b=>b.onclick=()=>{const g=b.dataset.g;grpOpen[g]=!grpOpen[g];if(!grpOpen[g])delete grpOpen[g];LS.set('grpOpen',grpOpen);renderDay()});
+  document.querySelectorAll('[data-gedit]').forEach(b=>b.onclick=()=>{const ge=list.filter(x=>x.grupa_id===b.dataset.gedit);if(ge.length)groupForm(ge,true)});
+  document.querySelectorAll('[data-gadd]').forEach(b=>b.onclick=()=>{const ge=list.filter(x=>x.grupa_id===b.dataset.gadd);if(!ge.length)return;
+    const g0=ge[0];openPicker({mode:'entry',onPick:it=>entryForm(it,{pora:g0.pora,grupa:{id:g0.grupa_id,base:baseName(g0.danie_nazwa),szt:g0.grupa_szt,godzina:g0.godzina}})})});
   document.querySelectorAll('.entry').forEach(b=>{let tmr=null,lp=false;
     const cancel=()=>{clearTimeout(tmr);tmr=null};
     b.addEventListener('touchstart',()=>{lp=false;tmr=setTimeout(()=>{lp=true;if(navigator.vibrate)navigator.vibrate(30);batchSheet(list,[b.dataset.id],'Zaznacz pozycje')},500)},{passive:true});
@@ -368,6 +386,7 @@ function batchSheet(entries,checked,title){
     <div class="lbl">Pora posiłku</div>
     <div class="chips" id="bp">${PORY.map(p=>`<button class="chip" data-p="${esc(p)}">${p}</button>`).join('')}</div>
     <button class="btn primary big" id="ok"></button>
+    <button class="btn big" id="grp">🍽 Połącz w danie</button>
     <button class="btn ghost big danger" id="del"></button>`,{full:ents.length>4});
   const bt=$(ov,'#bt');let pora=null,tT=false,pT=false;
   const chosen=()=>ents.filter(e=>sel.has(e.id));
@@ -377,7 +396,8 @@ function batchSheet(entries,checked,title){
     if(!pT)setPora(ps.length===1?ps[0]:null);
     const ok=$(ov,'#ok'),del=$(ov,'#del');
     ok.textContent=`Zastosuj do zaznaczonych (${s.length})`;ok.disabled=!s.length;
-    del.textContent=`Usuń zaznaczone (${s.length})`;del.disabled=!s.length}
+    del.textContent=`Usuń zaznaczone (${s.length})`;del.disabled=!s.length;
+    const gb=$(ov,'#grp');gb.textContent=`🍽 Połącz w danie (${s.length})`;gb.disabled=s.length<2}
   const boxes=()=>ov.querySelectorAll('input[type=checkbox]');
   boxes().forEach(c=>c.onchange=()=>{c.checked?sel.add(c.dataset.id):sel.delete(c.dataset.id);sync()});
   $(ov,'#all').onclick=()=>{boxes().forEach(c=>{c.checked=true;sel.add(c.dataset.id)});sync()};
@@ -388,9 +408,48 @@ function batchSheet(entries,checked,title){
     s.forEach(e=>{const u={...e};if(t)u.godzina=t;if(pora)u.pora=pora;if(u.godzina===e.godzina&&u.pora===e.pora)return;
       u.zmieniono=isoNow();upsertLocal(u);enqueue('updateEntry',u);n++});
     ov.close();renderDay();toast(n?`Zmieniono: ${n}`:'Bez zmian')};
+  $(ov,'#grp').onclick=()=>{const s=chosen();if(s.length<2)return;ov.close();groupForm(s,false)};
   $(ov,'#del').onclick=()=>{const s=chosen();if(!s.length||!confirm(`Usunąć zaznaczone pozycje (${s.length})?`))return;
     s.forEach(e=>{deleteLocal(e.id);enqueue('deleteEntry',{id:e.id})});ov.close();renderDay();toast('Usunięto')};
   sync()}
+
+/* ---------- danie z wpisów (grupa) ---------- */
+function groupNames(){const set=new Set(LS.get('grpNames',[]));Object.values(dayCache).forEach(es=>es.forEach(e=>{if(e.danie_nazwa)set.add(baseName(e.danie_nazwa))}));return[...set].sort((a,b)=>a.localeCompare(b,'pl'))}
+function groupForm(ents,edit){
+  const g0=ents[0],kc=ents.reduce((a,x)=>a+num(x.kcal),0),w=ents.reduce((a,x)=>a+num(x.ilosc_g),0);
+  const ov=sheet(edit?'Danie':'Połącz w danie',`
+    <p class="muted" style="margin:0 0 4px">${ents.length} składników · ${Math.round(w)} g · ${Math.round(kc)} kcal</p>
+    <label>Nazwa dania *<input id="gn" list="gnl" value="${esc(edit?baseName(g0.danie_nazwa):'')}" placeholder="np. Tortilla z tofu" autocomplete="off"></label>
+    <datalist id="gnl">${groupNames().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
+    <label>Ile sztuk / porcji (opcjonalnie)<input id="gs" inputmode="decimal" value="${edit&&num(g0.grupa_szt)>0?fv(num(g0.grupa_szt)):''}" placeholder="np. 2"></label>
+    <p class="muted">W arkuszu zapisze się z datą, np. „… (${dSuffix(g0.data)})”.${edit?'':' Wszystkie składniki dostaną wspólną porę i godzinę.'}</p>
+    <button class="btn primary big" id="ok">${edit?'Zapisz':'Połącz w danie'}</button>
+    ${edit?`<button class="btn big" id="tm">🕒 Zmień godzinę / porę dania</button>
+    <button class="btn big" id="sv">⭐ Zapisz jako danie do powtórzenia</button>
+    <button class="btn ghost big danger" id="un">Rozłącz (zostaw składniki)</button>`:''}`);
+  const nameIn=$(ov,'#gn');if(!edit)setTimeout(()=>nameIn.focus(),250);
+  const apply=(fn)=>{ents.forEach(e=>{const u=fn({...e});u.zmieniono=isoNow();upsertLocal(u);enqueue('updateEntry',u)})};
+  $(ov,'#ok').onclick=()=>{const nm=nameIn.value.trim();if(!nm)return toast('Podaj nazwę dania');
+    const sz=num($(ov,'#gs').value),szt=sz>0?r1(sz):'';
+    LS.set('grpNames',[nm,...LS.get('grpNames',[]).filter(x=>x!==nm)].slice(0,40));
+    if(edit){apply(u=>{u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;return u})}
+    else{const gid=uid(),srt=ents.slice().sort((a,b)=>String(a.godzina).localeCompare(String(b.godzina))),t0=srt[0].godzina;
+      const cnt={};ents.forEach(e=>cnt[e.pora]=(cnt[e.pora]||0)+1);const pora=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
+      apply(u=>{u.grupa_id=gid;u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;u.godzina=t0;u.pora=pora;return u});
+      collapsed[pora]=false;LS.set('collapsed',collapsed)}
+    ov.close();renderDay();toast(edit?'Zapisano':'Połączono w danie')};
+  if(!edit)return;
+  $(ov,'#tm').onclick=()=>{ov.close();batchSheet(ents,ents.map(e=>e.id),baseName(g0.danie_nazwa)+' – godzina')};
+  $(ov,'#un').onclick=()=>{if(!confirm('Rozłączyć danie? Składniki zostaną jako osobne pozycje.'))return;
+    apply(u=>{u.grupa_id='';u.danie_nazwa='';u.grupa_szt='';return u});ov.close();renderDay();toast('Rozłączono')};
+  $(ov,'#sv').onclick=()=>{const nm=nameIn.value.trim()||baseName(g0.danie_nazwa);const pr=ents.filter(e=>e.typ==='produkt');
+    if(!pr.length)return toast('Brak produktów do zapisania');
+    const exists=db.dania.some(d=>norm(d.nazwa)===norm(nm));const dn=exists?`${nm} (${dSuffix(g0.data)})`:nm;
+    const sz=num($(ov,'#gs').value);
+    const d={id:uid(),nazwa:dn,porcje:sz>0?r1(sz):1,waga_g:r1(pr.reduce((a,e)=>a+num(e.ilosc_g),0)),dodano:isoNow()};
+    const sk=pr.map(e=>({danie_id:d.id,produkt_id:String(e.ref_id),gramy:r1(num(e.ilosc_g))}));
+    db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
+    toast(`Zapisano danie „${dn}”${pr.length<ents.length?' (bez składników, które same są daniami)':''}`)}}
 
 /* ---------- arkusze (okna) ---------- */
 function sheet(title,body,{full=false}={}){
@@ -562,7 +621,7 @@ function dishForm(cb){
   render()}
 
 /* ---------- wpis do dziennika (dodawanie i edycja) ---------- */
-function entryForm(item,{entry=null,pora=null}={}){
+function entryForm(item,{entry=null,pora=null,grupa=null}={}){
   const edit=!!entry;
   const base=item?per100(item):{...Object.fromEntries(ALLK.map(k=>[k,null])),_mz:''};
   if(edit&&num(entry.ilosc_g)>0){NUT.forEach(k=>{const v=val(entry[k]);if(v!=null)base[k]=v*100/num(entry.ilosc_g)});
@@ -573,12 +632,12 @@ function entryForm(item,{entry=null,pora=null}={}){
   const unit=typ==='produkt'&&item&&num(item.porcja_g)>0?{g:num(item.porcja_g),n:item.porcja_nazwa||'1 porcja'}:null;
   const hm=nowHM();
   const mealT=!edit&&pora?(dayCache[curDate]||[]).filter(x=>x.pora===pora).map(x=>String(x.godzina)).sort().pop():null;
-  const st={g:edit?num(entry.ilosc_g):(porcja?Math.round(porcja):unit?unit.g:100),pora:edit?entry.pora:(pora||guessPora(hm)),data:edit?entry.data:curDate,godz:edit?entry.godzina:(mealT||hm)};
+  const st={g:edit?num(entry.ilosc_g):(porcja?Math.round(porcja):unit?unit.g:100),pora:edit?entry.pora:(pora||guessPora(hm)),data:edit?entry.data:curDate,godz:edit?entry.godzina:(grupa?grupa.godzina:(mealT||hm))};
   let poraTouched=edit||!!pora;
   const quick=porcja?[[.5,'½ porcji'],[1,'1 porcja'],[1.5,'1½ porcji'],[2,'2 porcje']].map(([f,l])=>[Math.round(porcja*f),l])
     :unit?[[unit.g,esc(unit.n)],[r1(unit.g*2),'×2'],[r1(unit.g*3),'×3'],[100,'100 g']]
     :[[50,'50 g'],[100,'100 g'],[150,'150 g'],[200,'200 g']];
-  const ov=sheet(edit?'Edytuj wpis':'Dodaj',`
+  const ov=sheet(edit?'Edytuj wpis':(grupa?'Dodaj do: '+grupa.base:'Dodaj'),`
     <div class="hero"><b>${esc(nazwa)}</b><small>${typ==='danie'?'Danie'+(porcja?` · porcja ${Math.round(porcja)} g`:''):(unit?`Produkt · ${esc(unit.n)} = ${r1(unit.g)} g`:'Produkt')}</small>
       ${typ==='produkt'&&item?'<br><button class="btn ghost" id="ep" style="font-size:13px;padding:6px 12px;margin-top:6px">✎ Edytuj produkt / porcję</button>':''}</div>
     <div class="amount"><input id="g" inputmode="decimal" value="${r1(st.g)}" aria-label="Ilość w gramach"><span>g</span></div>
@@ -605,7 +664,9 @@ function entryForm(item,{entry=null,pora=null}={}){
     if(st.g<=0)return toast('Podaj ilość');if(!st.data||!st.godz)return toast('Podaj datę i godzinę');
     const m=calc(base,st.g);
     const e={id:edit?entry.id:uid(),data:st.data,godzina:st.godz,pora:st.pora,typ,ref_id:String(edit?entry.ref_id:item.id),nazwa,ilosc_g:r1(st.g),
-      dodano:edit?entry.dodano:isoNow(),zmieniono:edit?isoNow():'',mikro_zrodlo:m._mz||''};
+      dodano:edit?entry.dodano:isoNow(),zmieniono:edit?isoNow():'',mikro_zrodlo:m._mz||'',
+      grupa_id:edit?(entry.grupa_id||''):(grupa?grupa.id:''),grupa_szt:edit?(entry.grupa_szt??''):(grupa?grupa.szt??'':''),
+      danie_nazwa:edit?(entry.grupa_id?`${baseName(entry.danie_nazwa)} (${dSuffix(st.data)})`:''):(grupa?`${grupa.base} (${dSuffix(st.data)})`:'')};
     ALLK.forEach(k=>e[k]=m[k]==null?'':m[k]);
     upsertLocal(e);enqueue(edit?'updateEntry':'addEntry',e);if(!edit)pushRecent(typ,e.ref_id);
     ov.close();toast(edit?'Zapisano':'Dodano');

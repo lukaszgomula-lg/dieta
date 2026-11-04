@@ -23,8 +23,9 @@ const SCHEMA = {
   Dziennik: {
     cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono',
       'nasycone', 'cukry', 'blonnik', 'sol',
-      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug', 'woda_g', 'plyn_ml', 'alkohol_g'],
-    text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo']
+      'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug', 'woda_g', 'plyn_ml', 'alkohol_g',
+      'grupa_id', 'danie_nazwa', 'grupa_szt'],
+    text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo', 'grupa_id', 'danie_nazwa']
   },
   /* jeden wiersz na dzień: zamkniety = TAK, gdy wszystkie posiłki są wpisane */
   Dni: {
