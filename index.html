@@ -442,14 +442,19 @@ function groupForm(ents,edit){
   $(ov,'#tm').onclick=()=>{ov.close();batchSheet(ents,ents.map(e=>e.id),baseName(g0.danie_nazwa)+' – godzina')};
   $(ov,'#un').onclick=()=>{if(!confirm('Rozłączyć danie? Składniki zostaną jako osobne pozycje.'))return;
     apply(u=>{u.grupa_id='';u.danie_nazwa='';u.grupa_szt='';return u});ov.close();renderDay();toast('Rozłączono')};
-  $(ov,'#sv').onclick=()=>{const nm=nameIn.value.trim()||baseName(g0.danie_nazwa);const pr=ents.filter(e=>e.typ==='produkt');
-    if(!pr.length)return toast('Brak produktów do zapisania');
+  $(ov,'#sv').onclick=()=>{const nm=nameIn.value.trim()||baseName(g0.danie_nazwa);
+    /* składniki będące daniami rozkładamy na ich produkty w odpowiedniej proporcji */
+    const acc=new Map();const addP=(pid,g)=>acc.set(String(pid),(acc.get(String(pid))||0)+g);let miss=0;
+    ents.forEach(e=>{const g=num(e.ilosc_g);if(e.typ==='produkt')return addP(e.ref_id,g);
+      const sk0=db.skladniki.filter(x=>String(x.danie_id)===String(e.ref_id)),W=sk0.reduce((a,x)=>a+num(x.gramy),0);
+      if(!W){miss++;return}sk0.forEach(x=>addP(x.produkt_id,num(x.gramy)*g/W))});
+    if(!acc.size)return toast('Brak składników do zapisania');
     const exists=db.dania.some(d=>norm(d.nazwa)===norm(nm));const dn=exists?`${nm} (${dSuffix(g0.data)})`:nm;
     const sz=num($(ov,'#gs').value);
-    const d={id:uid(),nazwa:dn,porcje:sz>0?r1(sz):1,waga_g:r1(pr.reduce((a,e)=>a+num(e.ilosc_g),0)),dodano:isoNow()};
-    const sk=pr.map(e=>({danie_id:d.id,produkt_id:String(e.ref_id),gramy:r1(num(e.ilosc_g))}));
+    const sk=[...acc].map(([pid,g])=>({danie_id:'',produkt_id:pid,gramy:r1(g)}));
+    const d={id:uid(),nazwa:dn,porcje:sz>0?r1(sz):1,waga_g:r1(sk.reduce((a,x)=>a+x.gramy,0)),dodano:isoNow()};sk.forEach(x=>x.danie_id=d.id);
     db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
-    toast(`Zapisano danie „${dn}”${pr.length<ents.length?' (bez składników, które same są daniami)':''}`)}}
+    toast(`Zapisano danie „${dn}” · ${Math.round(d.waga_g)} g${miss?' (pominięto '+miss+' nieznane danie)':''}`)}}
 
 /* ---------- arkusze (okna) ---------- */
 function sheet(title,body,{full=false}={}){
