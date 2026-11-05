@@ -24,3 +24,14 @@ Punkt wyjścia: EFSA – dorosły mężczyzna **ok. 2500 ml wody łącznie** na 
 
 Dane w Dzienniku na wpis: `plyn_ml` (płyny wypite), `woda_g` (woda łącznie, z jedzeniem), `alkohol_g` (g etanolu).
 Pogodę sprawdzić w dniu ustalania celu. Aplikacja pokazuje osobno także same płyny (informacyjnie). Pasek wody łącznie: niebieski < 90%, zielony 90–135%, czerwony > 135%.
+
+# Suplementy i leki – instrukcja dla trenera
+
+Arkusz **MINDE_Zdrowie_baza** (aplikacja dieta czyta go przez skrypt diety):
+
+- **SUPL_PRODUKTY** – katalog kupionych preparatów: `id, nazwa, marka, typ (suplement/lek), skladnik, sklad_porcji (np. „EPA 180 mg + DHA 120 mg / kaps.”), jedn_porcji, w_opakowaniu, status (w użyciu / skończony / zapas / do potwierdzenia), od, do, uwagi`. Gdy preparat się kończy: `status = skończony`, `do = data`, nowy preparat jako nowy wiersz.
+- **PLAN_SUPLEMENTACJI** – plan: `id, produkt_id, nazwa, skladnik, dawka, jedn, dawka_skladnika, pora, kiedy, od, do, aktywny, uwagi, ustalono`.
+  - `pora`: rano na czczo / śniadanie / przed treningiem / po treningu / obiad / kolacja / wieczór / przed snem / dowolnie
+  - `kiedy`: codziennie / trening / nietrening / opcjonalnie (dzień treningowy = `Cele.typ_dnia` zawiera „trening”)
+  - `aktywny`: TAK = widoczne w aplikacji; PROJEKT = wersja robocza; NIE = wyłączone. Zmiana preparatu = zmiana `produkt_id` i dawki w tym samym wierszu (historia zostaje w dzienniku).
+- **SUPLEMENTY_DZIENNIK** – odhaczenia z aplikacji: `status` = przyjete / pominiete (pominięte wpisuje się automatycznie przy zamknięciu dnia); `plan_id` puste = spoza planu.

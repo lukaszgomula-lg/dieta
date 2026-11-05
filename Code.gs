@@ -5,6 +5,8 @@
  * 3) Wdróż jako aplikację internetową (Wykonaj jako: Ja, Dostęp: Każdy).
  */
 const TOKEN = 'ZMIEN-NA-SWOJE-HASLO';
+/* arkusz MINDE_Zdrowie_baza – suplementy i leki (zakładki oznaczone ext: true) */
+const ZDROWIE_ID = '1M4aMzxcDuvl9yFDu6BVRYDE_Fz1hUJwmnmS6j8cPQCw';
 
 const SCHEMA = {
   Produkty: {
@@ -36,13 +38,30 @@ const SCHEMA = {
   Cele: {
     cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono', 'woda_ml'],
     text: ['data', 'typ_dnia', 'uwaga', 'ustalono']
+  },
+  /* ---- arkusz Zdrowie ---- */
+  /* katalog kupionych preparatów – uzupełnia trener (Claude) */
+  SUPL_PRODUKTY: { ext: true,
+    cols: ['id', 'nazwa', 'marka', 'typ', 'skladnik', 'sklad_porcji', 'jedn_porcji', 'w_opakowaniu', 'status', 'od', 'do', 'uwagi'],
+    text: ['id', 'nazwa', 'marka', 'typ', 'skladnik', 'sklad_porcji', 'jedn_porcji', 'w_opakowaniu', 'status', 'od', 'do', 'uwagi']
+  },
+  /* plan – ustala trener; aplikacja pokazuje pozycje z aktywny = TAK */
+  PLAN_SUPLEMENTACJI: { ext: true,
+    cols: ['id', 'produkt_id', 'nazwa', 'skladnik', 'dawka', 'jedn', 'dawka_skladnika', 'pora', 'kiedy', 'od', 'do', 'aktywny', 'uwagi', 'ustalono'],
+    text: ['id', 'produkt_id', 'nazwa', 'skladnik', 'dawka', 'jedn', 'dawka_skladnika', 'pora', 'kiedy', 'od', 'do', 'aktywny', 'uwagi', 'ustalono']
+  },
+  /* odhaczenia z aplikacji */
+  SUPLEMENTY_DZIENNIK: { ext: true,
+    cols: ['id', 'data', 'plan_id', 'produkt_id', 'nazwa', 'dawka', 'jedn', 'pora', 'status', 'godzina', 'zapisano'],
+    text: ['id', 'data', 'plan_id', 'produkt_id', 'nazwa', 'dawka', 'jedn', 'pora', 'status', 'godzina', 'zapisano']
   }
 };
 
-/** Uruchom raz – tworzy zakładki i nagłówki. */
+/** Uruchom raz – tworzy zakładki i nagłówki (i prosi o dostęp do arkusza Zdrowie). */
 function setup() {
+  ensureSchema_();
   const ss = SpreadsheetApp.getActive();
-  Object.keys(SCHEMA).forEach(function (name) {
+  Object.keys(SCHEMA).filter(function (n) { return !SCHEMA[n].ext; }).forEach(function (name) {
     const s = SCHEMA[name];
     const sh = ss.getSheetByName(name) || ss.insertSheet(name);
     sh.getRange(1, 1, 1, s.cols.length).setValues([s.cols]).setFontWeight('bold');
@@ -62,12 +81,13 @@ function doGet(e) {
     const p = e.parameter || {};
     auth_(p.token);
     if (p.action === 'init') {
-      return { produkty: rows_('Produkty'), dania: rows_('Dania'), skladniki: rows_('Skladniki_dan'), cele: cele_() };
+      return { produkty: rows_('Produkty'), dania: rows_('Dania'), skladniki: rows_('Skladniki_dan'), cele: cele_(), supl: supl_() };
     }
     if (p.action === 'day') {
       const dz = rows_('Dni').filter(function (r) { return r.data === p.date; })[0] || null;
       const cel = rows_('Cele').filter(function (r) { return r.data === p.date; })[0] || null;
-      return { v: 3, entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }), dzien: dz, cel: cel, cele: cele_() };
+      return { v: 4, entries: rows_('Dziennik').filter(function (r) { return r.data === p.date; }), dzien: dz, cel: cel, cele: cele_(),
+        supl: supl_(), suplLog: rows_('SUPLEMENTY_DZIENNIK').filter(function (r) { return r.data === p.date; }) };
     }
     throw new Error('Nieznana akcja');
   });
@@ -96,6 +116,12 @@ function doPost(e) {
           if (r > 0) writeRow_('Dni', r, d); else append_('Dni', d);
           break;
         }
+        case 'logSupl': upsert_('SUPLEMENTY_DZIENNIK', d); break;
+        case 'delSupl': {
+          const r = findRow_('SUPLEMENTY_DZIENNIK', d.id);
+          if (r > 0) sheet_('SUPLEMENTY_DZIENNIK').deleteRow(r);
+          break;
+        }
         case 'deleteEntry': {
           const r = findRow_('Dziennik', d.id);
           if (r > 0) sheet_('Dziennik').deleteRow(r);
@@ -119,11 +145,22 @@ function cele_() {
   return rows_('Cele').filter(function (r) { return r.data && r.data >= od && r.data <= doo; });
 }
 
+/** Plan (wszystkie wiersze – aplikacja sama filtruje po dacie i aktywności) i katalog preparatów. */
+function supl_() {
+  return { plan: rows_('PLAN_SUPLEMENTACJI').filter(function (r) { return r.id; }),
+           produkty: rows_('SUPL_PRODUKTY').filter(function (r) { return r.id; }) };
+}
+
+let ZSS_ = null;
+function ss_(name) {
+  if (SCHEMA[name] && SCHEMA[name].ext) { if (!ZSS_) ZSS_ = SpreadsheetApp.openById(ZDROWIE_ID); return ZSS_; }
+  return SpreadsheetApp.getActive();
+}
+
 /** Dopisuje brakujące kolumny (np. po aktualizacji skryptu) bez ruszania danych. */
 function ensureSchema_() {
-  const ss = SpreadsheetApp.getActive();
   Object.keys(SCHEMA).forEach(function (name) {
-    const s = SCHEMA[name];
+    const s = SCHEMA[name], ss = ss_(name);
     let sh = ss.getSheetByName(name);
     if (!sh) {
       try { sh = ss.insertSheet(name); }
@@ -146,7 +183,7 @@ function handle_(fn) {
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 function auth_(t) { if (t !== TOKEN) throw new Error('Zły token'); }
-function sheet_(name) { return SpreadsheetApp.getActive().getSheetByName(name); }
+function sheet_(name) { return ss_(name).getSheetByName(name); }
 
 function clean_(v) {
   if (v instanceof Date) {

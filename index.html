@@ -66,6 +66,13 @@ summary{cursor:pointer}
 .entry.sub{padding-left:38px;background:color-mix(in srgb,var(--acc2) 35%,transparent)}
 .grp-act{display:flex;gap:8px;padding:6px 12px 10px 38px;background:color-mix(in srgb,var(--acc2) 35%,transparent)}
 .grp-act .btn{padding:7px 12px;font-size:13px}
+.sup{display:flex;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:11px 16px;gap:12px;align-items:center;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.sup:active{background:var(--acc2)}
+.ck2{width:24px;height:24px;border-radius:50%;border:2px solid var(--mut);display:grid;place-items:center;flex:none;font-size:14px;font-weight:700;color:var(--onacc)}
+.sup.on .ck2{background:var(--acc);border-color:var(--acc)}
+.sup.skip .ck2{border-color:var(--warn);color:var(--warn)}
+.sup.on .nm b{color:var(--mut)}
+.slbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:10px 16px 4px}
 .nm{flex:1;min-width:0}
 .nm b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nm small{color:var(--mut);font-size:13px}
@@ -228,6 +235,10 @@ let recent=LS.get('recent',[]);
 let collapsed=LS.get('collapsed',{});
 const isCollapsed=p=>collapsed[p]!==false;
 let grpOpen=LS.get('grpOpen',{});
+/* suplementy i leki – plan i dziennik w arkuszu Zdrowie */
+let suplData=LS.get('supl',{plan:[],produkty:[]});
+let suplLog=LS.get('suplLog',{});
+const PORY_S=['rano na czczo','śniadanie','przed treningiem','po treningu','obiad','kolacja','wieczór','przed snem','dowolnie'];
 /* dania złożone z wpisów (grupy): nazwa w arkuszu z datą, w aplikacji bez */
 const baseName=n=>String(n||'').replace(/\s*\(\d{1,2}\.\d{1,2}\.\d{2}\)$/,'');
 const dSuffix=d=>{const [y,m,dd]=String(d).split('-');return `${+dd}.${+m}.${String(y).slice(2)}`};
@@ -279,7 +290,7 @@ async function flush(){if(flushing||!cfg.url)return;flushing=true;
 
 async function refreshDb(){
   const j=await apiGet({action:'init'});
-  storeCele(j.cele);
+  storeCele(j.cele);if(j.supl){suplData=j.supl;LS.set('supl',suplData)}
   const P=j.produkty.map(p=>({...p,id:String(p.id),kod:String(p.kod??'')}));
   const D=j.dania.map(d=>({...d,id:String(d.id),porcje:num(d.porcje)||1}));
   const S=j.skladniki.map(s=>({danie_id:String(s.danie_id),produkt_id:String(s.produkt_id),gramy:num(s.gramy)}));
@@ -295,7 +306,10 @@ async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
   try{const j=await apiGet({action:'day',date:d});
     let list=j.entries.map(e=>({...e,id:String(e.id),godzina:String(e.godzina),ilosc_g:num(e.ilosc_g),kcal:num(e.kcal),bialko:num(e.bialko),tluszcz:num(e.tluszcz),wegle:num(e.wegle)}));
     dayCache[d]=applyQueue(list,d);saveDays();
-    if(j.v>=3){storeCele(j.cele);if(j.cel)storeCele([j.cel])}if(j.v>=2){let dz=j.dzien||null;queue.forEach(op=>{if(op.action==='setDay'&&op.data.data===d)dz=op.data});dniCache[d]=dz;LS.set('dni',dniCache);backfill(d)}
+    if(j.v>=3){storeCele(j.cele);if(j.cel)storeCele([j.cel])}
+    if(j.v>=4){if(j.supl){suplData=j.supl;LS.set('supl',suplData)}let sl=(j.suplLog||[]).map(x=>({...x,id:String(x.id)}));
+      queue.forEach(op=>{if(op.action==='logSupl'){sl=sl.filter(x=>x.id!==op.data.id);if(op.data.data===d)sl.push(op.data)}else if(op.action==='delSupl')sl=sl.filter(x=>x.id!==op.data.id)});
+      suplLog[d]=sl;saveSupl()}if(j.v>=2){let dz=j.dzien||null;queue.forEach(op=>{if(op.action==='setDay'&&op.data.data===d)dz=op.data});dniCache[d]=dz;LS.set('dni',dniCache);backfill(d)}
     if(d===curDate)renderDay()}catch(e){lastErr=e.message}}
 /* uzupełnia brakujące wartości (błonnik, cukry, sól, mikro) w starszych wpisach */
 function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.typ,e.ref_id);const g=num(e.ilosc_g);if(!it||!(g>0))return;
@@ -307,7 +321,8 @@ function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.t
 let dniCache=LS.get('dni',{});
 let celeCache=LS.get('cele',{});
 function storeCele(arr){if(!Array.isArray(arr))return;arr.forEach(c=>{if(c&&c.data)celeCache[String(c.data)]=c});LS.set('cele',celeCache)}
-function setDayClosed(d,closed){const o={data:d,zamkniety:closed?'TAK':'',zamknieto:closed?isoNow():''};dniCache[d]=o;LS.set('dni',dniCache);enqueue('setDay',o);renderDay();toast(closed?'Dzień zamknięty ✓':'Dzień otwarty')}
+function setDayClosed(d,closed){
+  if(closed)planFor(d).filter(p=>p._req==='req'&&!logFor(d,p.id)).forEach(p=>putSupl(suplRec(d,p,'pominiete','')));const o={data:d,zamkniety:closed?'TAK':'',zamknieto:closed?isoNow():''};dniCache[d]=o;LS.set('dni',dniCache);enqueue('setDay',o);renderDay();toast(closed?'Dzień zamknięty ✓':'Dzień otwarty')}
 function upsertLocal(e){for(const d in dayCache)dayCache[d]=dayCache[d].filter(x=>x.id!==e.id);(dayCache[e.data]=dayCache[e.data]||[]).push(e);saveDays()}
 function deleteLocal(id){for(const d in dayCache)dayCache[d]=dayCache[d].filter(x=>x.id!==id);saveDays()}
 function pushRecent(typ,id){recent=recent.filter(r=>!(r.typ===typ&&r.id===id));recent.unshift({typ,id});recent=recent.slice(0,25);LS.set('recent',recent)}
@@ -321,6 +336,54 @@ function goalHTML(c,T){if(!c||!(num(c.kcal)>0||num(c.woda_ml)>0))return'';
     return `<div class="gr ${cl}"><span class="nm">${n}</span><span class="bar"><i style="width:${Math.min(100,Math.round(p*100))}%"></i></span><span class="v"><b>${f(v)}</b> / ${f(g)}${u}</span></div>`}).join('');
   const typ=c.typ_dnia?esc(String(c.typ_dnia)):'',uw=c.uwaga?' · '+esc(String(c.uwaga)):'';
   return `<div class="goal"><div class="goal-h"><span>Cel dnia${typ?' · '+typ:''}${uw}</span></div>${rows}</div>`}
+
+/* ---------- suplementy i leki ---------- */
+function saveSupl(){const lim=addDays(today(),-60);for(const d in suplLog)if(d<lim)delete suplLog[d];LS.set('suplLog',suplLog)}
+function dayKind(d){const c=celeCache[d];if(!c||!c.typ_dnia)return null;const t=norm(c.typ_dnia);return t.includes('tren')&&!t.includes('nietren')?'T':'NT'}
+function planFor(d){const kind=dayKind(d);
+  return (suplData.plan||[]).filter(p=>String(p.aktywny).toUpperCase()==='TAK'&&(!p.od||String(p.od)<=d)&&(!p.do||String(p.do)>=d)).map(p=>{const k=norm(p.kiedy||'codziennie');let r;
+    if(k.startsWith('opc'))r='opt';else if(k.startsWith('nietren'))r=kind==='NT'?'req':kind==='T'?null:'opt';else if(k.startsWith('tren'))r=kind==='T'?'req':kind==='NT'?null:'opt';else r='req';
+    return r?{...p,_req:r}:null}).filter(Boolean)}
+const suplProd=id=>(suplData.produkty||[]).find(x=>String(x.id)===String(id));
+const logFor=(d,pid)=>(suplLog[d]||[]).find(l=>l.plan_id===pid);
+function putSupl(o){const d=o.data;suplLog[d]=(suplLog[d]||[]).filter(x=>x.id!==o.id);suplLog[d].push(o);saveSupl();enqueue('logSupl',o)}
+function dropSupl(d,id){suplLog[d]=(suplLog[d]||[]).filter(x=>x.id!==id);saveSupl();enqueue('delSupl',{id})}
+function suplRec(d,p,status,godz){const ex=logFor(d,p.id);return{id:ex?ex.id:uid(),data:d,plan_id:p.id,produkt_id:p.produkt_id||'',nazwa:p.nazwa||p.skladnik||'',dawka:String(p.dawka??''),jedn:p.jedn||'',pora:p.pora||'',status,godzina:godz,zapisano:isoNow()}}
+function suplHTML(d){const plan=planFor(d),log=suplLog[d]||[];if(!plan.length&&!log.length&&!(suplData.plan||[]).length)return'';
+  const req=plan.filter(p=>p._req==='req'),done=req.filter(p=>{const l=logFor(d,p.id);return l&&l.status==='przyjete'}).length,c=isCollapsed('__supl');
+  const row=p=>{const l=logFor(d,p.id),on=l&&l.status==='przyjete',sk=l&&l.status==='pominiete',pr=suplProd(p.produkt_id);
+    const sub=[[p.dawka,p.jedn].filter(Boolean).join(' '),p.dawka_skladnika,pr&&pr.nazwa&&pr.nazwa!==p.nazwa?pr.nazwa+(pr.marka?' ('+pr.marka+')':''):''].filter(Boolean).join(' · ');
+    return `<button class="sup${on?' on':''}${sk?' skip':''}" data-sp="${esc(p.id)}"><span class="ck2">${on?'✓':sk?'–':''}</span><span class="nm"><b>${esc(p.nazwa||p.skladnik)}</b><small>${esc(sub)}${p.uwagi?' · '+esc(p.uwagi):''}</small></span><span class="k">${on?esc(l.godzina):sk?'pominięte':''}</span></button>`};
+  let body='';const gs=[...PORY_S,...new Set(req.map(p=>p.pora).filter(x=>x&&!PORY_S.includes(x)))];
+  gs.forEach(g=>{const ps=req.filter(p=>(p.pora||'dowolnie')===g);if(ps.length)body+=`<div class="slbl">${esc(g)}</div>`+ps.map(row).join('')});
+  const opt=plan.filter(p=>p._req==='opt');if(opt.length)body+=`<div class="slbl">opcjonalnie${dayKind(d)?'':' / bez celu dnia'}</div>`+opt.map(row).join('');
+  const ex=log.filter(l=>!l.plan_id);if(ex.length)body+='<div class="slbl">poza planem</div>'+ex.map(l=>`<button class="sup on" data-sx="${esc(l.id)}"><span class="ck2">✓</span><span class="nm"><b>${esc(l.nazwa)}</b><small>${esc([l.dawka,l.jedn].filter(Boolean).join(' '))}</small></span><span class="k">${esc(l.godzina)}</span></button>`).join('');
+  if(!plan.length)body+='<p class="muted" style="margin:8px 16px">Brak aktywnego planu na ten dzień – ustala go trener.</p>';
+  body+='<div class="grp-act" style="padding-left:16px;background:none"><button class="btn ghost" id="supX">+ Spoza planu</button></div>';
+  return `<section class="meal"><div class="meal-h"><button class="meal-t" data-tog="__supl"><span class="chev">${c?'▸':'▾'}</span><span class="nm"><b>💊 Suplementy i leki</b><small>${req.length?`${done}/${req.length} przyjęte`:'brak pozycji obowiązkowych'}</small></span></button></div>${c?'':body}</section>`}
+function suplItemSheet(d,p){const l=logFor(d,p.id);
+  const ov=sheet(p.nazwa||p.skladnik,`<p class="muted" style="margin:0">${esc([[p.dawka,p.jedn].filter(Boolean).join(' '),p.pora,p.uwagi].filter(Boolean).join(' · '))}</p>
+    <label>Godzina przyjęcia<input type="time" id="st" value="${esc(l&&l.godzina||nowHM())}"></label>
+    <button class="btn primary big" id="ok">✓ Przyjęte</button><button class="btn big" id="sk">Pominięte</button>
+    ${l?'<button class="btn ghost big danger" id="rm">Wyczyść</button>':''}`);
+  $(ov,'#ok').onclick=()=>{putSupl(suplRec(d,p,'przyjete',$(ov,'#st').value||nowHM()));ov.close();renderDay()};
+  $(ov,'#sk').onclick=()=>{putSupl(suplRec(d,p,'pominiete',''));ov.close();renderDay()};
+  const rm=$(ov,'#rm');if(rm)rm.onclick=()=>{dropSupl(d,l.id);ov.close();renderDay()}}
+function suplExtraSheet(d){const ov=sheet('Spoza planu',`<label>Nazwa *<input id="sn" placeholder="np. Ibuprom" autocomplete="off"></label>
+    <div class="grid2"><label>Dawka<input id="sd" inputmode="decimal" placeholder="1"></label><label>Jednostka<input id="sj" placeholder="tabl."></label></div>
+    <label>Godzina<input type="time" id="st" value="${nowHM()}"></label><button class="btn primary big" id="ok">Zapisz</button>`);
+  $(ov,'#ok').onclick=()=>{const n=$(ov,'#sn').value.trim();if(!n)return toast('Podaj nazwę');
+    putSupl({id:uid(),data:d,plan_id:'',produkt_id:'',nazwa:n,dawka:$(ov,'#sd').value.trim(),jedn:$(ov,'#sj').value.trim(),pora:'',status:'przyjete',godzina:$(ov,'#st').value||nowHM(),zapisano:isoNow()});ov.close();renderDay()}}
+function bindSupl(){const d=curDate,plan=planFor(d);
+  document.querySelectorAll('[data-sp]').forEach(b=>{let tmr=null,lp=false;const p=plan.find(x=>x.id===b.dataset.sp);if(!p)return;
+    const cancel=()=>{clearTimeout(tmr);tmr=null};
+    b.addEventListener('touchstart',()=>{lp=false;tmr=setTimeout(()=>{lp=true;if(navigator.vibrate)navigator.vibrate(30);suplItemSheet(d,p)},500)},{passive:true});
+    b.addEventListener('touchmove',cancel,{passive:true});b.addEventListener('touchend',cancel);b.addEventListener('touchcancel',cancel);
+    b.addEventListener('contextmenu',e=>{e.preventDefault();suplItemSheet(d,p)});
+    b.onclick=()=>{if(lp){lp=false;return}const l=logFor(d,p.id);
+      if(l&&l.status==='przyjete')dropSupl(d,l.id);else{putSupl(suplRec(d,p,'przyjete',nowHM()));if(navigator.vibrate)navigator.vibrate(20)}renderDay()}});
+  document.querySelectorAll('[data-sx]').forEach(b=>b.onclick=()=>{if(confirm('Usunąć ten wpis?')){dropSupl(d,b.dataset.sx);renderDay()}});
+  const x=$$('#supX');if(x)x.onclick=()=>suplExtraSheet(d)}
 
 /* ---------- widok dnia ---------- */
 const rowE=(e,cls='')=>`<button class="entry${cls}" data-id="${esc(e.id)}"><span class="nm"><b>${esc(e.nazwa)}</b><small>${r1(num(e.ilosc_g))} g · ${esc(e.godzina)}</small></span><span class="k">${Math.round(num(e.kcal))} kcal</span></button>`;
@@ -352,10 +415,12 @@ function renderDay(){
       ${n?`<button class="icon" data-time="${esc(p)}" aria-label="Godzina posiłku: ${esc(p)}">🕒</button>`:''}
       <button class="icon add-s" data-add="${esc(p)}" aria-label="Dodaj do: ${esc(p)}">+</button></div>
     ${n&&!c?`<div class="mac-s"><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></div>`+itemsHTML(es):''}</section>`}).join('')
+    +suplHTML(curDate)
     +(list.length>1?'<button class="btn ghost" id="multi" style="width:100%;margin-top:4px">☑ Zaznacz kilka pozycji</button>':'')
     +(curDate<=t?(closed?'<div class="dayc"><span>✓ Dzień zamknięty – wszystko wpisane</span><button class="btn ghost" id="dayTog">Otwórz</button></div>'
       :'<button class="btn" id="dayTog" style="width:100%;margin-top:10px">✓ Zamknij dzień (wszystko wpisane)</button>'):'');
   const dt=$$('#dayTog');if(dt)dt.onclick=()=>setDayClosed(curDate,!closed);
+  bindSupl();
   document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>openAdd(b.dataset.add));
   document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const p=b.dataset.tog;collapsed[p]=!isCollapsed(p);LS.set('collapsed',collapsed);renderDay()});
   document.querySelectorAll('[data-time]').forEach(b=>b.onclick=()=>{const es=list.filter(e=>e.pora===b.dataset.time);batchSheet(es,es.map(e=>e.id),b.dataset.time+' – godzina')});
