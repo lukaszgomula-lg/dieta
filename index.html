@@ -130,6 +130,7 @@ input:focus{outline:2px solid var(--acc);border-color:transparent}
   <div id="dateBox"><span id="dateLbl"></span><small id="dateSub"></small><input type="date" id="dateInp" aria-label="Wybierz dzień"></div>
   <button class="icon" id="next" aria-label="Następny dzień">›</button>
   <button id="sync"></button>
+  <button class="icon" id="dishes" aria-label="Moje dania">🍲</button>
   <button class="icon" id="set" aria-label="Ustawienia">⚙︎</button>
 </header>
 <main id="main"><div id="sum"></div><div id="meals"></div></main>
@@ -259,6 +260,7 @@ function dishWeight(d){return num(d.waga_gotowa)>0?num(d.waga_gotowa):rawWeight(
 let naczynia=LS.get('naczynia',[]);
 const tareSel=(id)=>`<select id="${id}" class="tare"><option value="">bez naczynia (netto)</option>${naczynia.map((n,i)=>`<option value="${i}">${esc(n.nazwa)} (${Math.round(n.g)} g)</option>`).join('')}</select>`;
 const tareOf=sel=>{const i=sel&&sel.value;return i===''||i==null?0:num((naczynia[+i]||{}).g)};
+const vkey=d=>String(d.wersja||String(d.dodano||'').slice(0,10))+'|'+String(d.dodano||'');
 const baseOfDish=d=>d.baza||String(d.nazwa||'').replace(/\s*\(\d{1,2}\.\d{1,2}\.\d{2}\)$/,'');
 const val=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null};
 const microSrc=p=>GEN_BY_ID.get(String(p.id))||(p.odpowiednik?GEN_BY_ID.get(String(p.odpowiednik)):null)||null;
@@ -551,7 +553,7 @@ function openPicker({mode,onPick}){
   const q=$(ov,'#q'),list=$(ov,'#list');
   const pick=it=>{ensureProduct(it);ov.close();onPick(it)};
   const dishPool=()=>{const by={};db.dania.forEach(d=>{(by[norm(baseOfDish(d))]=by[norm(baseOfDish(d))]||[]).push(d)});
-    return Object.values(by).flatMap(vs=>{vs.sort((a,b)=>String(b.wersja||b.dodano).localeCompare(String(a.wersja||a.dodano)));
+    return Object.values(by).flatMap(vs=>{vs.sort((a,b)=>vkey(b).localeCompare(vkey(a)));
       const act=vs.filter(d=>d.status!=='zjedzone');return (act.length?act:[vs[0]]).map(d=>asItem(d,'danie'))})};
   const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'?dishPool():[])];
   const sub=it=>{const b=it.typ==='danie'?'Danie':it.zrodlo==='baza ogólna'?'Baza ogólna':esc(it.marka||'Mój produkt');
@@ -560,7 +562,7 @@ function openPicker({mode,onPick}){
     if(!s){items=recent.map(r=>findItem(r.typ,r.id)).filter(it=>it&&(mode==='entry'||it.typ==='produkt'));
       head=items.length?'<div class="lbl">Ostatnio używane</div>':'<p class="muted">Zacznij pisać albo zeskanuj kod kreskowy.</p>'}
     else{const w=s.split(/\s+/);items=pool().filter(it=>{const h=norm(it.nazwa+' '+(it.marka||''));return w.every(x=>h.includes(x))})
-      .sort((a,b)=>(a.typ==='danie'&&b.typ==='danie'&&norm(baseOfDish(a))===norm(baseOfDish(b))?String(b.wersja||b.dodano).localeCompare(String(a.wersja||a.dodano)):0)||(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
+      .sort((a,b)=>(a.typ==='danie'&&b.typ==='danie'&&norm(baseOfDish(a))===norm(baseOfDish(b))?vkey(b).localeCompare(vkey(a)):0)||(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
       head=items.length?'':'<p class="muted">Brak w twojej bazie i bazie ogólnej.</p>'}
     items=items.slice(0,40);
     list.innerHTML=head+items.map((it,i)=>`<button class="item" data-i="${i}"><span class="nm"><b>${esc(it.nazwa)}</b><small>${sub(it)}</small></span><span class="k">${Math.round(per100(it).kcal)} kcal/100 g</span></button>`).join('')
@@ -705,12 +707,53 @@ function dishForm(cb,{from=null}={}){
     const nm=$(ov,'#n').value.trim();if(!nm)return toast('Podaj nazwę dania');
     if(!st.sk.length)return toast('Dodaj co najmniej jeden składnik');
     const today_=today(),again=from||db.dania.some(d=>norm(baseOfDish(d))===norm(nm));
-    const d={id:uid(),nazwa:again?`${nm} (${dSuffix(today_)})`:nm,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow(),
+    let full=again?`${nm} (${dSuffix(today_)})`:nm;
+    for(let k=2;db.dania.some(x=>x.nazwa===full);k++)full=`${nm} (${dSuffix(today_)} ${String.fromCharCode(96+k)})`;
+    const d={id:uid(),nazwa:full,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow(),
       baza:nm,wersja:today_,waga_gotowa:cooked()?r1(cooked()):'',status:''};
     const sk=st.sk.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
     db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
     ov.close();toast('Danie zapisane');cb&&cb(asItem(d,'danie'))};
   render()}
+/* ---------- przeglądarka dań ---------- */
+function dishBrowser(){
+  const ov=sheet('Moje dania',`<input id="q" placeholder="Szukaj dania…" autocomplete="off"><div id="list" style="margin-top:10px"></div>
+    <button class="btn ghost" id="nd" style="width:100%;margin-top:8px">+ Nowe danie</button>`,{full:true});
+  const q=$(ov,'#q'),list=$(ov,'#list');
+  function render(){const w=norm(q.value).trim().split(/\s+/).filter(Boolean),by={};
+    db.dania.forEach(d=>{const k=norm(baseOfDish(d));(by[k]=by[k]||[]).push(d)});
+    const groups=Object.values(by).map(vs=>vs.sort((a,b)=>vkey(b).localeCompare(vkey(a))))
+      .filter(vs=>w.every(x=>norm(baseOfDish(vs[0])).includes(x)||db.skladniki.some(s=>vs.some(v=>v.id===s.danie_id)&&norm((prodIdx.get(String(s.produkt_id))||{}).nazwa).includes(x))))
+      .sort((a,b)=>baseOfDish(a[0]).localeCompare(baseOfDish(b[0]),'pl'));
+    list.innerHTML=groups.length?groups.map((vs,i)=>{const d=vs[0],por=dishWeight(d)/(num(d.porcje)||1),kc=per100(asItem(d,'danie')).kcal*por/100,act=vs.filter(v=>v.status!=='zjedzone').length;
+      return `<button class="item" data-i="${i}"><span class="nm"><b>${esc(baseOfDish(d))}</b><small>${db.skladniki.filter(s=>s.danie_id===d.id).length} skł. · ${vs.length>1?vs.length+' wersji · ':''}ostatnio ${esc(d.wersja||String(d.dodano).slice(0,10))}${act?'':' · zjedzone'}</small></span><span class="k">${Math.round(kc)} kcal/porcja</span></button>`}).join('')
+      :'<p class="muted">Brak dań. Zapisz danie przy dodawaniu albo z połączonych składników (⭐).</p>';
+    list.querySelectorAll('.item').forEach(b=>b.onclick=()=>dishDetail(groups[+b.dataset.i],0,render))}
+  q.oninput=render;render();
+  $(ov,'#nd').onclick=()=>dishForm(()=>render())}
+function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
+  const ov=sheet(baseOfDish(d),`<div id="dd"></div>`,{full:true});
+  function render(){const sk=db.skladniki.filter(s=>s.danie_id===d.id),W=rawWeight(d),Wc=dishWeight(d),n=num(d.porcje)||1,P=per100(asItem(d,'danie'));
+    const por=calc(P,Wc/n);
+    $(ov,'#dd').innerHTML=`
+      ${vs.length>1?`<div class="chips" style="margin-bottom:8px">${vs.map((v,i)=>`<button class="chip${i===vi?' on':''}" data-v="${i}">${esc((String(v.nazwa).match(/\(([^)]*)\)$/)||[])[1]||(v.wersja?dSuffix(v.wersja):'pierwsza'))}${v.status==='zjedzone'?' ✓':''}</button>`).join('')}</div>`:''}
+      <p class="muted" style="margin:0">${esc(d.nazwa)} · ${fv(n)} porcji · składniki ${Math.round(W)} g${num(d.waga_gotowa)>0?` → gotowe ${Math.round(Wc)} g`:' · brak wagi po ugotowaniu'}</p>
+      <div class="lbl">Porcja · ${Math.round(Wc/n)} g</div><div class="macbox" style="margin-top:0">${macHTML(por)}</div>
+      <div class="lbl">Składniki – lista zakupów</div>
+      <div class="chips" style="margin-bottom:8px">${[.5,1,1.5,2].map(m=>`<button class="chip${m===mult?' on':''}" data-m="${m}">×${String(m).replace('.',',')}</button>`).join('')}</div>
+      ${sk.map(s=>{const p=prodIdx.get(String(s.produkt_id))||GEN_BY_ID.get(String(s.produkt_id));return `<label class="ck"><input type="checkbox"><span class="nm"><b>${esc(p?p.nazwa:'?')}</b><small>${esc(p&&p.marka||'')}</small></span><span class="k">${Math.round(num(s.gramy)*mult)} g</span></label>`}).join('')}
+      <button class="btn primary big" id="ag">🔁 Ugotuj ponownie</button>
+      <div class="row2"><button class="btn big" id="wc">⚖ Waga po ugotowaniu</button><button class="btn big" id="ad">+ Do dziennika</button></div>
+      <button class="btn ghost big" id="zj">${d.status==='zjedzone'?'↩ Przywróć wersję':'✓ Oznacz wersję jako zjedzoną'}</button>`;
+    ov.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ov.close();dishDetail(vs,+b.dataset.v,refresh)});
+    ov.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mult=+b.dataset.m;render()});
+    $(ov,'#ag').onclick=()=>{ov.close();dishForm(nd=>{toast('Nowa wersja zapisana');refresh&&refresh();
+      const nvs=db.dania.filter(x=>norm(baseOfDish(x))===norm(baseOfDish(d))).sort((a,b)=>vkey(b).localeCompare(vkey(a)));dishDetail(nvs,0,refresh)},{from:d})};
+    $(ov,'#wc').onclick=()=>cookedSheet(d,()=>{const nd=db.dania.find(x=>x.id===d.id);vs[vi]=nd;ov.close();dishDetail(vs,vi,refresh)});
+    $(ov,'#ad').onclick=()=>{ov.close();entryForm(asItem(d,'danie'),{})};
+    $(ov,'#zj').onclick=()=>{const nd={...d,status:d.status==='zjedzone'?'':'zjedzone'};saveDish(nd);vs[vi]=nd;ov.close();refresh&&refresh();dishDetail(vs,vi,refresh)}}
+  render()}
+
 function saveDish(d){const i=db.dania.findIndex(x=>x.id===d.id);if(i>=0)db.dania[i]=d;saveDb();enqueue('updateDish',d);
   Object.keys(dayCache).forEach(backfill);renderDay()}
 function cookedSheet(dish,after){const W=rawWeight(dish);
@@ -811,6 +854,7 @@ $$('#next').onclick=()=>{curDate=addDays(curDate,1);loadDay()};
 $$('#dateInp').onchange=e=>{if(e.target.value){curDate=e.target.value;loadDay()}};
 $$('#fab').onclick=()=>openAdd(null);
 $$('#set').onclick=()=>openSettings(false);
+$$('#dishes').onclick=()=>dishBrowser();
 $$('#sync').onclick=()=>{if(queue.length){toast(lastErr?`Czeka ${queue.length}: ${lastErr}`:'Wysyłam…');flush()}else toast('Wszystko zapisane na Dysku')};
 window.addEventListener('online',flush);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){flush();loadDay()}});
