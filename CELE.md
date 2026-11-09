@@ -35,3 +35,13 @@ Arkusz **MINDE_Zdrowie_baza** (aplikacja dieta czyta go przez skrypt diety):
   - `kiedy`: codziennie / trening / nietrening / opcjonalnie (dzień treningowy = `Cele.typ_dnia` zawiera „trening”)
   - `aktywny`: TAK = widoczne w aplikacji; PROJEKT = wersja robocza; NIE = wyłączone. Zmiana preparatu = zmiana `produkt_id` i dawki w tym samym wierszu (historia zostaje w dzienniku).
 - **SUPLEMENTY_DZIENNIK** – odhaczenia z aplikacji: `status` = przyjete / pominiete (pominięte wpisuje się automatycznie przy zamknięciu dnia); `plan_id` puste = spoza planu.
+
+## Zdrowie: 4 kluczowe parametry + wskazówka dnia (od 2026-11-09)
+Kolumny w zakładce `Cele` (wpisuje trener):
+- `nasycone_max` (g) – limit tłuszczów nasyconych (LDL/ApoB; Lp(a) wysokie),
+- `sol_max` (g) – limit soli (ciśnienie),
+- `blonnik_min` (g) – minimum błonnika (LDL, glukoza),
+- `foliany_min` (µg) – minimum folianów (niski kwas foliowy we krwi),
+- `wskazowka` (tekst) – jedno–dwa konkretne zalecenia na dzień na podstawie poprzednich dni.
+
+Aplikacja pokazuje panel „Zdrowie” pod celami makro: limity zielone ≤ limit / czerwone powyżej, minima niebieskie poniżej / zielone po osiągnięciu; „≈” gdy część produktów nie ma danych. Gdy `sol_max` jest ustawione, ukrywa się linia błonnik/cukry/sól z podsumowania (bez dublowania). Wskazówka wyświetla się jako ramka „Na dziś”.

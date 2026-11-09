@@ -36,8 +36,9 @@ const SCHEMA = {
   },
   /* cele dzienne – wpisuje trener (Claude); aplikacja tylko czyta */
   Cele: {
-    cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono', 'woda_ml'],
-    text: ['data', 'typ_dnia', 'uwaga', 'ustalono']
+    cols: ['data', 'kcal', 'bialko', 'tluszcz', 'wegle', 'typ_dnia', 'uwaga', 'ustalono', 'woda_ml',
+           'nasycone_max', 'sol_max', 'blonnik_min', 'foliany_min', 'wskazowka'],
+    text: ['data', 'typ_dnia', 'uwaga', 'ustalono', 'wskazowka']
   },
   /* ---- arkusz Zdrowie ---- */
   /* katalog kupionych preparatów – uzupełnia trener (Claude) */
