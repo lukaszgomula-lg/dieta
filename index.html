@@ -46,7 +46,8 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 .g-lo .v b{color:#2563eb}.g-ok .v b{color:#16a34a}.g-hi .v b{color:#dc2626}
 @media (prefers-color-scheme:dark){.g-lo i{background:#60a5fa}.g-ok i{background:#4ade80}.g-hi i{background:#f87171}.g-lo .v b{color:#60a5fa}.g-ok .v b{color:#4ade80}.g-hi .v b{color:#f87171}}
 .meal{background:var(--card);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
-.meal-h{display:flex;align-items:center;padding:4px 6px 4px 10px;gap:2px}
+.meal-h{display:flex;align-items:center;padding:4px 6px 4px 10px;gap:2px;background:var(--acc2)}
+.meal-h .meal-t b{color:var(--acc)}
 .meal-t{flex:1;display:flex;align-items:center;gap:8px;background:none;border:0;text-align:left;padding:8px 4px;min-width:0;border-radius:10px}
 .meal-t:disabled{cursor:default}
 .meal-t b{font-size:15px}
@@ -56,6 +57,7 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 input[type=checkbox]{display:inline-block;width:22px;height:22px;margin:0;padding:0;flex:none;accent-color:var(--acc)}
 .btn:disabled{opacity:.45}
 summary{cursor:pointer}
+select.tare{font:inherit;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg);width:100%;margin-top:4px}
 .hint{text-align:center;color:var(--mut);font-size:14px;margin-top:6px;min-height:20px}
 .add-s{color:var(--acc);font-size:26px}
 .entry{display:flex;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 16px;gap:10px;align-items:center}
@@ -251,15 +253,24 @@ function saveDays(){const lim=addDays(today(),-60);for(const d in dayCache)if(d<
 /* ---------- wartości odżywcze ---------- */
 const asItem=(o,typ)=>({...o,typ});
 function findItem(typ,id){if(typ==='danie'){const d=db.dania.find(x=>String(x.id)===String(id));return d?asItem(d,'danie'):null}const p=prodIdx.get(String(id));return p?asItem(p,'produkt'):null}
-function dishWeight(d){return db.skladniki.filter(s=>s.danie_id===d.id).reduce((a,s)=>a+num(s.gramy),0)}
+function rawWeight(d){return db.skladniki.filter(s=>s.danie_id===d.id).reduce((a,s)=>a+num(s.gramy),0)}
+function dishWeight(d){return num(d.waga_gotowa)>0?num(d.waga_gotowa):rawWeight(d)}
+/* naczynia (tara) – zapisane w telefonie */
+let naczynia=LS.get('naczynia',[]);
+const tareSel=(id)=>`<select id="${id}" class="tare"><option value="">bez naczynia (netto)</option>${naczynia.map((n,i)=>`<option value="${i}">${esc(n.nazwa)} (${Math.round(n.g)} g)</option>`).join('')}</select>`;
+const tareOf=sel=>{const i=sel&&sel.value;return i===''||i==null?0:num((naczynia[+i]||{}).g)};
+const baseOfDish=d=>d.baza||String(d.nazwa||'').replace(/\s*\(\d{1,2}\.\d{1,2}\.\d{2}\)$/,'');
 const val=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null};
 const microSrc=p=>GEN_BY_ID.get(String(p.id))||(p.odpowiednik?GEN_BY_ID.get(String(p.odpowiednik)):null)||null;
 function per100(it){
   if(it.typ==='danie'){const t=Object.fromEntries(ALLK.map(k=>[k,null]));let W=0,n=0,nm=0;
     db.skladniki.filter(s=>s.danie_id===it.id).forEach(s=>{const g=num(s.gramy);W+=g;n++;const p=prodIdx.get(String(s.produkt_id))||GEN_BY_ID.get(String(s.produkt_id));if(!p)return;
       const q=per100(asItem(p,'produkt'));if(q._mz)nm++;ALLK.forEach(k=>{if(q[k]!=null)t[k]=(t[k]||0)+q[k]*g/100})});
-    ALLK.forEach(k=>{if(t[k]!=null)t[k]=W?t[k]*100/W:0});
-    t._mz=n?`danie: mikro dla ${nm}/${n} składników`:'';return t}
+    /* waga po ugotowaniu: ta sama ilość składników odżywczych w mniejszej masie (odparowała woda) */
+    const Wc=num(it.waga_gotowa)>0?num(it.waga_gotowa):W;
+    if(t.woda_g!=null&&Wc<W)t.woda_g=Math.max(0,t.woda_g-(W-Wc));
+    ALLK.forEach(k=>{if(t[k]!=null)t[k]=Wc?t[k]*100/Wc:0});
+    t._mz=n?`danie: mikro dla ${nm}/${n} składników`+(Wc!==W?` · po ugotowaniu ${Math.round(Wc)} g z ${Math.round(W)} g`:''):'';return t}
   const self=GEN_BY_ID.get(String(it.id))||null,src=microSrc(it),o={};
   NUT.forEach(k=>{const v=val(it[k]);o[k]=v!=null?v:(self?val(self[k]):null)});
   let own=0;
@@ -292,7 +303,7 @@ async function refreshDb(){
   const j=await apiGet({action:'init'});
   storeCele(j.cele);if(j.supl){suplData=j.supl;LS.set('supl',suplData)}
   const P=j.produkty.map(p=>({...p,id:String(p.id),kod:String(p.kod??'')}));
-  const D=j.dania.map(d=>({...d,id:String(d.id),porcje:num(d.porcje)||1}));
+  const D=j.dania.map(d=>({...d,id:String(d.id),porcje:num(d.porcje)||1,waga_gotowa:num(d.waga_gotowa)||''}));
   const S=j.skladniki.map(s=>({danie_id:String(s.danie_id),produkt_id:String(s.produkt_id),gramy:num(s.gramy)}));
   queue.forEach(op=>{if(op.action==='addProduct'&&!P.some(x=>x.id===op.data.id))P.push(op.data);
     if(op.action==='addDish'&&!D.some(x=>x.id===op.data.danie.id)){D.push(op.data.danie);S.push(...op.data.skladniki)}});
@@ -314,7 +325,8 @@ async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
 /* uzupełnia brakujące wartości (błonnik, cukry, sól, mikro) w starszych wpisach */
 function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.typ,e.ref_id);const g=num(e.ilosc_g);if(!it||!(g>0))return;
   const m=calc(per100(it),g),u={...e};let ch=false;
-  NUT.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
+  if(e.typ==='danie')NUT.forEach(k=>{const cur=val(u[k]),nw=m[k];if(nw!=null&&(cur==null||Math.abs(cur-nw)>0.011)){u[k]=nw;ch=true}});
+  else NUT.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
   /* mikro i płyny zawsze zgodne z aktualnym produktem (np. po oznaczeniu jako napój albo zmianie odpowiednika) */
   [...MK,...PLYN].forEach(k=>{const cur=val(u[k]),nw=m[k];if(nw==null?cur!=null:(cur==null||Math.abs(cur-nw)>0.011)){u[k]=nw==null?'':nw;ch=true}});
   if(ch){u.mikro_zrodlo=m._mz||'';upsertLocal(u);enqueue('updateEntry',u)}})}
@@ -538,14 +550,17 @@ function openPicker({mode,onPick}){
     <div class="row2" style="margin-top:12px"><button class="btn ghost" id="newP">+ Nowy produkt</button>${mode==='entry'?'<button class="btn ghost" id="newD">+ Nowe danie</button>':''}</div>`,{full:true});
   const q=$(ov,'#q'),list=$(ov,'#list');
   const pick=it=>{ensureProduct(it);ov.close();onPick(it)};
-  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'?db.dania.map(d=>asItem(d,'danie')):[])];
+  const dishPool=()=>{const by={};db.dania.forEach(d=>{(by[norm(baseOfDish(d))]=by[norm(baseOfDish(d))]||[]).push(d)});
+    return Object.values(by).flatMap(vs=>{vs.sort((a,b)=>String(b.wersja||b.dodano).localeCompare(String(a.wersja||a.dodano)));
+      const act=vs.filter(d=>d.status!=='zjedzone');return (act.length?act:[vs[0]]).map(d=>asItem(d,'danie'))})};
+  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'?dishPool():[])];
   const sub=it=>{const b=it.typ==='danie'?'Danie':it.zrodlo==='baza ogólna'?'Baza ogólna':esc(it.marka||'Mój produkt');
     return it.typ!=='danie'&&num(it.porcja_g)>0?`${b} · ${esc(it.porcja_nazwa||'porcja')} = ${r1(num(it.porcja_g))} g`:b};
   function render(){const s=norm(q.value).trim();let items,head='';
     if(!s){items=recent.map(r=>findItem(r.typ,r.id)).filter(it=>it&&(mode==='entry'||it.typ==='produkt'));
       head=items.length?'<div class="lbl">Ostatnio używane</div>':'<p class="muted">Zacznij pisać albo zeskanuj kod kreskowy.</p>'}
     else{const w=s.split(/\s+/);items=pool().filter(it=>{const h=norm(it.nazwa+' '+(it.marka||''));return w.every(x=>h.includes(x))})
-      .sort((a,b)=>(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
+      .sort((a,b)=>(a.typ==='danie'&&b.typ==='danie'&&norm(baseOfDish(a))===norm(baseOfDish(b))?String(b.wersja||b.dodano).localeCompare(String(a.wersja||a.dodano)):0)||(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
       head=items.length?'':'<p class="muted">Brak w twojej bazie i bazie ogólnej.</p>'}
     items=items.slice(0,40);
     list.innerHTML=head+items.map((it,i)=>`<button class="item" data-i="${i}"><span class="nm"><b>${esc(it.nazwa)}</b><small>${sub(it)}</small></span><span class="k">${Math.round(per100(it).kcal)} kcal/100 g</span></button>`).join('')
@@ -659,36 +674,54 @@ function genericPicker(cb){
   q.oninput=render;render()}
 
 /* ---------- nowe danie ---------- */
-function dishForm(cb){
-  const st={sk:[]};
-  const ov=sheet('Nowe danie',`
-    <label>Nazwa dania *<input id="n" placeholder="np. Owsianka z bananem"></label>
-    <label>Na ile porcji?<input id="p" inputmode="decimal" value="1"></label>
+function dishForm(cb,{from=null}={}){
+  const st={sk:from?db.skladniki.filter(x=>x.danie_id===from.id).map(x=>({produkt_id:String(x.produkt_id),gramy:num(x.gramy)})):[]};
+  const base=from?baseOfDish(from):'';
+  const ov=sheet(from?'Ugotuj ponownie':'Nowe danie',`
+    ${from?`<p class="muted" style="margin:0">Nowa wersja „${esc(base)}” – gramatury z poprzedniego razu, popraw to, co się zmieniło.</p>`:''}
+    <label>Nazwa dania *<input id="n" value="${esc(base)}" placeholder="np. Leczo"></label>
+    <label>Na ile porcji?<input id="p" inputmode="decimal" value="${from?num(from.porcje)||1:1}"></label>
     <div class="lbl">Składniki</div><div id="sk"></div>
     <button class="btn ghost" id="add" style="width:100%">+ Dodaj składnik</button>
+    <div class="lbl">Po ugotowaniu (opcjonalnie – można uzupełnić później)</div>
+    <div class="grid2"><label>Waga gotowego dania (g)<input id="wg" inputmode="decimal" placeholder="np. 1650"></label><label>Naczynie<span>${tareSel('wt')}</span></label></div>
     <div id="sum"></div>
     <button class="btn primary big" id="ok">Zapisz danie</button>`,{full:true});
-  const pIn=$(ov,'#p');
+  const pIn=$(ov,'#p'),wgIn=$(ov,'#wg'),wt=$(ov,'#wt');
+  const cooked=()=>{const g=num(wgIn.value);return g>0?Math.max(0,g-tareOf(wt)):0};
   function upd(){let W=0;const t={kcal:0,bialko:0,tluszcz:0,wegle:0};
     st.sk.forEach(s=>{const p=prodIdx.get(s.produkt_id);W+=s.gramy;if(!p)return;const m=calc(per100(asItem(p,'produkt')),s.gramy);for(const k in t)t[k]+=m[k]||0});
-    const n=num(pIn.value)||1,por={kcal:Math.round(t.kcal/n),bialko:r1(t.bialko/n),tluszcz:r1(t.tluszcz/n),wegle:r1(t.wegle/n)};
-    $(ov,'#sum').innerHTML=st.sk.length?`<div class="lbl">Jedna porcja · ${Math.round(W/n)} g</div><div class="macbox" style="margin-top:0">${macHTML(por)}</div>`:''}
+    const n=num(pIn.value)||1,Wc=cooked()||W,por={kcal:Math.round(t.kcal/n),bialko:r1(t.bialko/n),tluszcz:r1(t.tluszcz/n),wegle:r1(t.wegle/n)};
+    $(ov,'#sum').innerHTML=st.sk.length?`<div class="lbl">Jedna porcja · ${Math.round(Wc/n)} g${cooked()?` (składniki ${Math.round(W)} g → gotowe ${Math.round(Wc)} g)`:''}</div><div class="macbox" style="margin-top:0">${macHTML(por)}</div>`:''}
   function render(){
     $(ov,'#sk').innerHTML=st.sk.length?st.sk.map((s,i)=>{const p=prodIdx.get(s.produkt_id);return `<div class="skrow"><span class="nm">${esc(p?p.nazwa:'?')}</span><input inputmode="decimal" data-i="${i}" value="${s.gramy}"><span class="muted">g</span><button class="icon" data-rm="${i}" aria-label="Usuń">✕</button></div>`}).join(''):'<p class="muted">Dodaj składniki z gramaturą.</p>';
     ov.querySelectorAll('#sk input').forEach(x=>x.oninput=()=>{st.sk[+x.dataset.i].gramy=num(x.value);upd()});
     ov.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{st.sk.splice(+b.dataset.rm,1);render()});
     upd()}
-  pIn.oninput=upd;
+  pIn.oninput=upd;wgIn.oninput=upd;wt.onchange=upd;
   $(ov,'#add').onclick=()=>openPicker({mode:'ingredient',onPick:it=>{st.sk.push({produkt_id:String(it.id),gramy:100});render();
     const ins=ov.querySelectorAll('#sk input');const last=ins[ins.length-1];if(last){last.focus();last.select()}}});
   $(ov,'#ok').onclick=()=>{
-    const nazwa=$(ov,'#n').value.trim();if(!nazwa)return toast('Podaj nazwę dania');
+    const nm=$(ov,'#n').value.trim();if(!nm)return toast('Podaj nazwę dania');
     if(!st.sk.length)return toast('Dodaj co najmniej jeden składnik');
-    const d={id:uid(),nazwa,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow()};
+    const today_=today(),again=from||db.dania.some(d=>norm(baseOfDish(d))===norm(nm));
+    const d={id:uid(),nazwa:again?`${nm} (${dSuffix(today_)})`:nm,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow(),
+      baza:nm,wersja:today_,waga_gotowa:cooked()?r1(cooked()):'',status:''};
     const sk=st.sk.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
     db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
     ov.close();toast('Danie zapisane');cb&&cb(asItem(d,'danie'))};
   render()}
+function saveDish(d){const i=db.dania.findIndex(x=>x.id===d.id);if(i>=0)db.dania[i]=d;saveDb();enqueue('updateDish',d);
+  Object.keys(dayCache).forEach(backfill);renderDay()}
+function cookedSheet(dish,after){const W=rawWeight(dish);
+  const ov=sheet('Waga po ugotowaniu',`<p class="muted" style="margin:0">${esc(dish.nazwa)} · składniki razem ${Math.round(W)} g</p>
+    <div class="grid2"><label>Waga gotowego dania (g)<input id="wg" inputmode="decimal" value="${num(dish.waga_gotowa)>0?r1(num(dish.waga_gotowa)):''}"></label><label>Naczynie<span>${tareSel('wt')}</span></label></div>
+    <p class="hint" id="h"></p><button class="btn primary big" id="ok">Zapisz</button>`);
+  const wg=$(ov,'#wg'),wt=$(ov,'#wt'),net=()=>Math.max(0,num(wg.value)-tareOf(wt));
+  const h=()=>{$(ov,'#h').textContent=num(wg.value)>0?`netto ${Math.round(net())} g · ubyło ${Math.round(W-net())} g wody (${Math.round((1-net()/W)*100)}%)`:''};
+  wg.oninput=h;wt.onchange=h;h();
+  $(ov,'#ok').onclick=()=>{const n=net();if(!(n>0))return toast('Podaj wagę');if(n>W*1.5&&!confirm('Waga większa niż składniki – na pewno?'))return;
+    ov.close();saveDish({...dish,waga_gotowa:r1(n)});toast('Zapisano – wpisy tego dania przeliczone');after&&after()}}
 
 /* ---------- wpis do dziennika (dodawanie i edycja) ---------- */
 function entryForm(item,{entry=null,pora=null,grupa=null}={}){
@@ -709,9 +742,12 @@ function entryForm(item,{entry=null,pora=null,grupa=null}={}){
     :[[50,'50 g'],[100,'100 g'],[150,'150 g'],[200,'200 g']];
   const ov=sheet(edit?'Edytuj wpis':(grupa?'Dodaj do: '+grupa.base:'Dodaj'),`
     <div class="hero"><b>${esc(nazwa)}</b><small>${typ==='danie'?'Danie'+(porcja?` · porcja ${Math.round(porcja)} g`:''):(unit?`Produkt · ${esc(unit.n)} = ${r1(unit.g)} g`:'Produkt')}</small>
-      ${typ==='produkt'&&item?'<br><button class="btn ghost" id="ep" style="font-size:13px;padding:6px 12px;margin-top:6px">✎ Edytuj produkt / porcję</button>':''}</div>
+      ${typ==='produkt'&&item?'<br><button class="btn ghost" id="ep" style="font-size:13px;padding:6px 12px;margin-top:6px">✎ Edytuj produkt / porcję</button>':''}
+      ${dish?`${num(dish.waga_gotowa)>0?'':'<br><small style="color:var(--warn)">Brak wagi po ugotowaniu – liczę wagę składników</small>'}
+        <div class="chips c" style="margin-top:8px"><button class="chip" id="dc">⚖ Waga po ugotowaniu</button><button class="chip" id="dr">🔁 Ugotuj ponownie</button><button class="chip" id="dz">${dish.status==='zjedzone'?'↩ Przywróć':'✓ Zjedzone'}</button></div>`:''}</div>
     <div class="amount"><input id="g" inputmode="decimal" value="${r1(st.g)}" aria-label="Ilość w gramach"><span>g</span></div>
     <div class="hint" id="ph"></div>
+    ${naczynia.length?`<div style="display:flex;justify-content:center;margin-top:6px">${tareSel('tw')}</div>`:''}
     <div class="chips c" id="qk" style="margin-top:12px">${quick.map(([g,l])=>`<button class="chip" data-g="${g}">${l}</button>`).join('')}</div>
     <div class="macbox" id="mb"></div>
     <div class="hint" id="mb2" style="margin:-6px 0 6px"></div>
@@ -721,12 +757,17 @@ function entryForm(item,{entry=null,pora=null,grupa=null}={}){
     <button class="btn primary big" id="ok">${edit?'Zapisz zmiany':'Dodaj do dziennika'}</button>
     ${edit?'<button class="btn ghost big danger" id="del">Usuń wpis</button>':''}`);
   const gi=$(ov,'#g');
-  const upd=()=>{const m=calc(base,st.g);$(ov,'#mb').innerHTML=macHTML(m);$(ov,'#mb2').textContent=extraTxt(m);$(ov,'#ph').textContent=unit&&st.g>0?`= ${r1(st.g/unit.g)} × ${unit.n}`:''};
+  const twSel=$(ov,'#tw');const netG=()=>Math.max(0,num(gi.value)-tareOf(twSel));
+  if(twSel)twSel.onchange=()=>{st.g=netG();upd()};
+  const upd=()=>{const m=calc(base,st.g);$(ov,'#mb').innerHTML=macHTML(m);$(ov,'#mb2').textContent=extraTxt(m);$(ov,'#ph').textContent=(tareOf(twSel)?`netto ${r1(st.g)} g · `:'')+(unit&&st.g>0?`= ${r1(st.g/unit.g)} × ${unit.n}`:'')};
   const ep=$(ov,'#ep');if(ep)ep.onclick=()=>{ov.close();ensureProduct(item);
     productForm(prodIdx.get(String(item.id)),np=>entryForm(asItem(np,'produkt'),{entry,pora:st.pora}),{edit:true})};
   const setPora=p=>{st.pora=p;ov.querySelectorAll('#pr .chip').forEach(x=>x.classList.toggle('on',x.dataset.p===p))};
-  gi.oninput=()=>{st.g=num(gi.value);upd()};
-  ov.querySelectorAll('#qk .chip').forEach(b=>b.onclick=()=>{st.g=+b.dataset.g;gi.value=st.g;upd()});
+  gi.oninput=()=>{st.g=netG();upd()};
+  if(dish){$(ov,'#dc').onclick=()=>{ov.close();cookedSheet(dish,()=>entryForm(findItem('danie',dish.id),{entry,pora:st.pora,grupa}))};
+    $(ov,'#dr').onclick=()=>{ov.close();dishForm(nd=>entryForm(nd,{pora:st.pora,grupa}),{from:dish})};
+    $(ov,'#dz').onclick=()=>{ov.close();saveDish({...dish,status:dish.status==='zjedzone'?'':'zjedzone'});toast(dish.status==='zjedzone'?'Przywrócono':'Oznaczono jako zjedzone')}}
+  ov.querySelectorAll('#qk .chip').forEach(b=>b.onclick=()=>{st.g=+b.dataset.g;gi.value=st.g;if(twSel)twSel.value='';upd()});
   ov.querySelectorAll('#pr .chip').forEach(b=>b.onclick=()=>{poraTouched=true;setPora(b.dataset.p)});
   $(ov,'#t').onchange=e=>{st.godz=e.target.value;if(!poraTouched&&st.godz)setPora(guessPora(st.godz))};
   $(ov,'#d').onchange=e=>{st.data=e.target.value};
@@ -751,7 +792,13 @@ function openSettings(first){
     <label>Adres aplikacji (Apps Script)<input id="u" value="${esc(cfg.url)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
     <label>Token<input id="tk" value="${esc(cfg.token)}" autocomplete="off"></label>
     <button class="btn primary big" id="ok">Zapisz i połącz</button>
+    <div class="lbl">Naczynia (tara)</div><div id="nl"></div>
+    <div class="row2"><input id="nn" placeholder="np. Garnek duży"><input id="ng" inputmode="decimal" placeholder="waga g" style="max-width:110px"><button class="btn" id="na">Dodaj</button></div>
     <p class="muted" id="st">${queue.length?`Oczekuje na wysłanie: ${queue.length}${lastErr?' ('+esc(lastErr)+')':''}`:''}</p>`);
+  const nl=()=>{$(ov,'#nl').innerHTML=naczynia.length?naczynia.map((n,i)=>`<div class="skrow"><span class="nm">${esc(n.nazwa)}</span><span class="muted">${Math.round(n.g)} g</span><button class="icon" data-nd="${i}" aria-label="Usuń">✕</button></div>`).join(''):'<p class="muted">Brak. Dodaj garnki, blachy, talerze – przy ważeniu wybierzesz naczynie, a aplikacja odejmie jego wagę.</p>';
+    ov.querySelectorAll('[data-nd]').forEach(b=>b.onclick=()=>{naczynia.splice(+b.dataset.nd,1);LS.set('naczynia',naczynia);nl()})};nl();
+  $(ov,'#na').onclick=()=>{const n=$(ov,'#nn').value.trim(),g=num($(ov,'#ng').value);if(!n||!(g>0))return toast('Podaj nazwę i wagę');
+    naczynia.push({nazwa:n,g});LS.set('naczynia',naczynia);$(ov,'#nn').value='';$(ov,'#ng').value='';nl()};
   $(ov,'#ok').onclick=async()=>{
     cfg={url:$(ov,'#u').value.trim(),token:$(ov,'#tk').value.trim()};LS.set('cfg',cfg);
     const st=$(ov,'#st');st.textContent='Łączę…';

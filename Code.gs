@@ -15,8 +15,8 @@ const SCHEMA = {
     text: ['id', 'kod', 'nazwa', 'marka', 'zrodlo', 'dodano', 'porcja_nazwa', 'odpowiednik', 'napoj']
   },
   Dania: {
-    cols: ['id', 'nazwa', 'porcje', 'waga_g', 'dodano'],
-    text: ['id', 'nazwa', 'dodano']
+    cols: ['id', 'nazwa', 'porcje', 'waga_g', 'dodano', 'baza', 'wersja', 'waga_gotowa', 'status'],
+    text: ['id', 'nazwa', 'dodano', 'baza', 'wersja', 'status']
   },
   Skladniki_dan: {
     cols: ['danie_id', 'produkt_id', 'gramy'],
@@ -109,6 +109,7 @@ function doPost(e) {
             d.skladniki.forEach(function (s) { append_('Skladniki_dan', s); });
           }
           break;
+        case 'updateDish': upsert_('Dania', d); break;
         case 'addEntry':
         case 'updateEntry': upsert_('Dziennik', d); break;
         case 'setDay': {
