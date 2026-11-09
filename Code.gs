@@ -110,6 +110,7 @@ function doPost(e) {
           }
           break;
         case 'updateDish': upsert_('Dania', d); break;
+        case 'renameDish': renameDish_(d); break;
         case 'addEntry':
         case 'updateEntry': upsert_('Dziennik', d); break;
         case 'setDay': {
@@ -138,6 +139,31 @@ function doPost(e) {
 }
 
 /* ---------- pomocnicze ---------- */
+/** Zmiana nazwy dania: wiersze w Daniach + kopia nazwy w Dzienniku (powiązanie po ref_id zostaje). */
+function renameDish_(d) {
+  const names = d.names || {};
+  const ds = sheet_('Dania'), dc = SCHEMA.Dania.cols, dn = ds.getLastRow();
+  if (dn >= 2) {
+    const v = ds.getRange(2, 1, dn - 1, dc.length).getValues();
+    v.forEach(function (r, i) {
+      const id = String(r[0]);
+      if (names[id] !== undefined) {
+        ds.getRange(i + 2, dc.indexOf('nazwa') + 1).setValue(names[id]);
+        ds.getRange(i + 2, dc.indexOf('baza') + 1).setValue(d.baza);
+      }
+    });
+  }
+  const js = sheet_('Dziennik'), jc = SCHEMA.Dziennik.cols, jn = js.getLastRow();
+  if (jn >= 2) {
+    const typ = jc.indexOf('typ'), ref = jc.indexOf('ref_id'), naz = jc.indexOf('nazwa');
+    const v = js.getRange(2, 1, jn - 1, jc.length).getValues();
+    v.forEach(function (r, i) {
+      if (r[typ] === 'danie' && names[String(r[ref])] !== undefined && r[naz] !== names[String(r[ref])])
+        js.getRange(i + 2, naz + 1).setValue(names[String(r[ref])]);
+    });
+  }
+}
+
 /** Cele od 7 dni wstecz do 21 dni naprzód – aplikacja trzyma je w pamięci telefonu (praca offline). */
 function cele_() {
   const tz = Session.getScriptTimeZone(), d = new Date();

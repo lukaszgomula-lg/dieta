@@ -744,6 +744,7 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       ${sk.map(s=>{const p=prodIdx.get(String(s.produkt_id))||GEN_BY_ID.get(String(s.produkt_id));return `<label class="ck"><input type="checkbox"><span class="nm"><b>${esc(p?p.nazwa:'?')}</b><small>${esc(p&&p.marka||'')}</small></span><span class="k">${Math.round(num(s.gramy)*mult)} g</span></label>`}).join('')}
       <button class="btn primary big" id="ag">🔁 Ugotuj ponownie</button>
       <div class="row2"><button class="btn big" id="wc">⚖ Waga po ugotowaniu</button><button class="btn big" id="ad">+ Do dziennika</button></div>
+      <button class="btn ghost big" id="rn">✎ Zmień nazwę dania</button>
       <button class="btn ghost big" id="zj">${d.status==='zjedzone'?'↩ Przywróć wersję':'✓ Oznacz wersję jako zjedzoną'}</button>`;
     ov.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ov.close();dishDetail(vs,+b.dataset.v,refresh)});
     ov.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mult=+b.dataset.m;render()});
@@ -751,8 +752,21 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       const nvs=db.dania.filter(x=>norm(baseOfDish(x))===norm(baseOfDish(d))).sort((a,b)=>vkey(b).localeCompare(vkey(a)));dishDetail(nvs,0,refresh)},{from:d})};
     $(ov,'#wc').onclick=()=>cookedSheet(d,()=>{const nd=db.dania.find(x=>x.id===d.id);vs[vi]=nd;ov.close();dishDetail(vs,vi,refresh)});
     $(ov,'#ad').onclick=()=>{ov.close();entryForm(asItem(d,'danie'),{})};
+    $(ov,'#rn').onclick=()=>renameDish(vs,()=>{ov.close();refresh&&refresh();const nvs=vs.map(v=>db.dania.find(x=>x.id===v.id)||v);dishDetail(nvs,vi,refresh)});
     $(ov,'#zj').onclick=()=>{const nd={...d,status:d.status==='zjedzone'?'':'zjedzone'};saveDish(nd);vs[vi]=nd;ov.close();refresh&&refresh();dishDetail(vs,vi,refresh)}}
   render()}
+
+/* zmiana nazwy: wszystkie wersje + kopia nazwy w dawnych wpisach dziennika (powiązanie jest po id) */
+function renameDish(vs,after){const old=baseOfDish(vs[0]);
+  const ov=sheet('Zmień nazwę',`<label>Nowa nazwa<input id="rn" value="${esc(old)}" autocomplete="off"></label>
+    <p class="muted">Zmieni się we wszystkich wersjach (${vs.length}) i w dawnych wpisach dziennika. Daty wersji zostają.</p>
+    <button class="btn primary big" id="ok">Zmień nazwę</button>`);
+  $(ov,'#ok').onclick=()=>{const nm=$(ov,'#rn').value.trim();if(!nm)return toast('Podaj nazwę');if(nm===old){ov.close();return}
+    const names={};vs.forEach(v=>{const suf=(String(v.nazwa).match(/\s*\(([^)]*)\)$/)||[]);const nn=suf[1]&&norm(baseOfDish(v))===norm(old)&&String(v.nazwa)!==old?`${nm} (${suf[1]})`:nm;
+      names[v.id]=nn;const i=db.dania.findIndex(x=>x.id===v.id);if(i>=0)db.dania[i]={...db.dania[i],nazwa:nn,baza:nm}});
+    saveDb();
+    Object.keys(dayCache).forEach(day=>{dayCache[day]=dayCache[day].map(e=>e.typ==='danie'&&names[e.ref_id]?{...e,nazwa:names[e.ref_id]}:e)});saveDays();
+    enqueue('renameDish',{baza:nm,names});ov.close();renderDay();toast('Nazwa zmieniona');after&&after()}}
 
 function saveDish(d){const i=db.dania.findIndex(x=>x.id===d.id);if(i>=0)db.dania[i]=d;saveDb();enqueue('updateDish',d);
   Object.keys(dayCache).forEach(backfill);renderDay()}
