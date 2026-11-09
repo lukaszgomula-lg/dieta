@@ -44,6 +44,7 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 .bar i{display:block;height:100%;border-radius:99px;transition:width .3s}
 .g-lo i{background:#2563eb}.g-ok i{background:#16a34a}.g-hi i{background:#dc2626}
 .g-lo .v b{color:#2563eb}.g-ok .v b{color:#16a34a}.g-hi .v b{color:#dc2626}
+.hsec{padding:12px 14px}.hsec .goal{margin-top:0;padding-top:0;border-top:0}
 .tip{margin-top:10px;padding:9px 11px;border-radius:10px;background:color-mix(in srgb,#f59e0b 14%,transparent);font-size:13px;line-height:1.4}
 .tip b{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);margin-bottom:2px}
 @media (prefers-color-scheme:dark){.g-lo i{background:#60a5fa}.g-ok i{background:#4ade80}.g-hi i{background:#f87171}.g-lo .v b{color:#60a5fa}.g-ok .v b{color:#4ade80}.g-hi .v b{color:#f87171}}
@@ -436,7 +437,7 @@ function renderDay(){
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum"><div class="kcal">${Math.round(T.kcal)} <small>kcal</small></div><div class="mac"><div><b class="cB">${r1(T.b)}</b>B</div><div><b class="cT">${r1(T.t)}</b>T</div><div><b class="cW">${r1(T.w)}</b>W</div></div>
     ${CH&&num(CH.sol_max)>0?'':`<div class="sum2"><span class="fib">Błonnik <b>${X('blonnik')}</b> g</span><span>Cukry <b>${X('cukry')}</b> g</span><span>Sól <b>${X('sol')}</b> g</span></div>`}
-    <div class="sum2"><span class="wat">Woda łącznie <b>${fl(S('woda_g'))}</b> l</span><span>w tym płyny <b>${fl(S('plyn_ml'))}</b> l</span>${S('alkohol_g')>0?`<span>Alkohol <b>${fv(S('alkohol_g'))}</b> g</span>`:''}</div>${goalHTML(celeCache[curDate],{...T,wd:S('woda_g')})}${healthHTML(CH,list)}</div>`;
+    <div class="sum2"><span class="wat">Woda łącznie <b>${fl(S('woda_g'))}</b> l</span><span>w tym płyny <b>${fl(S('plyn_ml'))}</b> l</span>${S('alkohol_g')>0?`<span>Alkohol <b>${fv(S('alkohol_g'))}</b> g</span>`:''}</div>${goalHTML(celeCache[curDate],{...T,wd:S('woda_g')})}</div>`;
   const pory=[...PORY,...new Set(list.map(e=>e.pora).filter(p=>!PORY.includes(p)))];
   $$('#meals').innerHTML=pory.map(p=>{const es=list.filter(e=>e.pora===p),n=es.length,c=n&&isCollapsed(p),S=sum(es);
     const ts=[...new Set(es.map(e=>String(e.godzina)))].sort(),tm=ts.length>1?ts[0]+'–'+ts[ts.length-1]:(ts[0]||'');
@@ -446,6 +447,7 @@ function renderDay(){
       <button class="icon add-s" data-add="${esc(p)}" aria-label="Dodaj do: ${esc(p)}">+</button></div>
     ${n&&!c?`<div class="mac-s"><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></div>`+itemsHTML(es):''}</section>`}).join('')
     +suplHTML(curDate)
+    +(()=>{const h=healthHTML(CH,list);return h?`<section class="meal hsec">${h}</section>`:''})()
     +(list.length>1?'<button class="btn ghost" id="multi" style="width:100%;margin-top:4px">☑ Zaznacz kilka pozycji</button>':'')
     +(curDate<=t?(closed?'<div class="dayc"><span>✓ Dzień zamknięty – wszystko wpisane</span><button class="btn ghost" id="dayTog">Otwórz</button></div>'
       :'<button class="btn" id="dayTog" style="width:100%;margin-top:10px">✓ Zamknij dzień (wszystko wpisane)</button>'):'');
