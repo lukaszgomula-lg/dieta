@@ -322,6 +322,11 @@ async function refreshDb(){
   const D=j.dania.map(d=>({...d,id:String(d.id),porcje:num(d.porcje)||1,waga_gotowa:num(d.waga_gotowa)||''}));
   const S=j.skladniki.map(s=>({danie_id:String(s.danie_id),produkt_id:String(s.produkt_id),gramy:num(s.gramy)}));
   queue.forEach(op=>{if(op.action==='addProduct'&&!P.some(x=>x.id===op.data.id))P.push(op.data);
+    /* zmiany dań czekające w kolejce mają pierwszeństwo przed stanem z arkusza */
+    if(op.action==='editDish'){const i=D.findIndex(x=>x.id===op.data.danie.id);if(i>=0)D[i]=op.data.danie;else D.push(op.data.danie);
+      for(let k=S.length-1;k>=0;k--)if(S[k].danie_id===op.data.danie.id)S.splice(k,1);S.push(...op.data.skladniki)}
+    if(op.action==='updateDish'){const i=D.findIndex(x=>x.id===op.data.id);if(i>=0)D[i]=op.data}
+    if(op.action==='renameDish'){D.forEach((x,i)=>{if(op.data.names&&op.data.names[x.id]!==undefined)D[i]={...x,nazwa:op.data.names[x.id],baza:op.data.baza}})}
     if(op.action==='addDish'&&!D.some(x=>x.id===op.data.danie.id)){D.push(op.data.danie);S.push(...op.data.skladniki)}});
   db={produkty:P,dania:D,skladniki:S};saveDb()}
 
