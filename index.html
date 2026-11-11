@@ -274,9 +274,10 @@ const baseOfDish=d=>d.baza||String(d.nazwa||'').replace(/\s*\(\d{1,2}\.\d{1,2}\.
 const val=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null};
 const microSrc=p=>GEN_BY_ID.get(String(p.id))||(p.odpowiednik?GEN_BY_ID.get(String(p.odpowiednik)):null)||null;
 function per100(it){
-  if(it.typ==='danie'){const t=Object.fromEntries(ALLK.map(k=>[k,null]));let W=0,n=0,nm=0;
+  if(it.typ==='danie'){const t=Object.fromEntries(ALLK.map(k=>[k,null]));let W=0,n=0,nm=0,allDrink=true;
     db.skladniki.filter(s=>s.danie_id===it.id).forEach(s=>{const g=num(s.gramy);W+=g;n++;const p=prodIdx.get(String(s.produkt_id))||GEN_BY_ID.get(String(s.produkt_id));if(!p)return;
-      const q=per100(asItem(p,'produkt'));if(q._mz)nm++;ALLK.forEach(k=>{if(q[k]!=null)t[k]=(t[k]||0)+q[k]*g/100})});
+      const q=per100(asItem(p,'produkt'));if(q._mz)nm++;if(g>0&&!(q.plyn_ml>0))allDrink=false;ALLK.forEach(k=>{if(q[k]!=null)t[k]=(t[k]||0)+q[k]*g/100})});
+    if(!allDrink)t.plyn_ml=0;
     /* waga po ugotowaniu: ta sama ilość składników odżywczych w mniejszej masie (odparowała woda) */
     const Wc=num(it.waga_gotowa)>0?num(it.waga_gotowa):W;
     /* lżejsze niż składniki = odparowała woda; cięższe = produkt wchłonął wodę (kasza, ryż, makaron) */
@@ -337,9 +338,12 @@ async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
       queue.forEach(op=>{if(op.action==='logSupl'){sl=sl.filter(x=>x.id!==op.data.id);if(op.data.data===d)sl.push(op.data)}else if(op.action==='delSupl')sl=sl.filter(x=>x.id!==op.data.id)});
       suplLog[d]=sl;saveSupl()}if(j.v>=2){let dz=j.dzien||null;queue.forEach(op=>{if(op.action==='setDay'&&op.data.data===d)dz=op.data});dniCache[d]=dz;LS.set('dni',dniCache);backfill(d)}
     if(d===curDate)renderDay()}catch(e){lastErr=e.message}}
+/* składnik połączonego dania liczy się do płynów tylko, gdy całe danie to napoje (np. kawa z mlekiem), a nie woda do galaretki */
+function groupNotDrink(e,list){if(!e.grupa_id)return false;const ms=(list||[]).filter(x=>x.grupa_id===e.grupa_id);
+  return ms.some(x=>{const it=findItem(x.typ,x.ref_id);if(!it)return true;const q=per100(it);return !(q.plyn_ml>0)})}
 /* uzupełnia brakujące wartości (błonnik, cukry, sól, mikro) w starszych wpisach */
 function backfill(d){(dayCache[d]||[]).slice().forEach(e=>{const it=findItem(e.typ,e.ref_id);const g=num(e.ilosc_g);if(!it||!(g>0))return;
-  const m=calc(per100(it),g),u={...e};let ch=false;
+  const m=calc(per100(it),g),u={...e};let ch=false;if(groupNotDrink(e,dayCache[d]))m.plyn_ml=0;
   if(e.typ==='danie')NUT.forEach(k=>{const cur=val(u[k]),nw=m[k];if(nw!=null&&(cur==null||Math.abs(cur-nw)>0.011)){u[k]=nw;ch=true}});
   else NUT.forEach(k=>{if(val(u[k])==null&&m[k]!=null){u[k]=m[k];ch=true}});
   /* mikro i płyny zawsze zgodne z aktualnym produktem (np. po oznaczeniu jako napój albo zmianie odpowiednika) */
@@ -441,7 +445,7 @@ function renderDay(){
   const list=(dayCache[curDate]||[]).slice().sort((a,b)=>String(a.godzina).localeCompare(String(b.godzina)));
   const sum=es=>es.reduce((a,e)=>({kcal:a.kcal+num(e.kcal),b:a.b+num(e.bialko),t:a.t+num(e.tluszcz),w:a.w+num(e.wegle)}),{kcal:0,b:0,t:0,w:0});
   const T=sum(list);
-  const S=k=>list.reduce((a,e)=>{let v=PLYN.includes(k)?null:val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k];else v=val(e[k])}return a+(v||0)},0);
+  const S=k=>list.reduce((a,e)=>{if(k==='plyn_ml'&&groupNotDrink(e,list))return a;let v=PLYN.includes(k)?null:val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k];else v=val(e[k])}return a+(v||0)},0);
   const fl=ml=>String(Math.round(ml/100)/10).replace('.',',');
   const CH=celeCache[curDate];
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
