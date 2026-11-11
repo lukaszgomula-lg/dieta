@@ -717,19 +717,21 @@ function genericPicker(cb){
   q.oninput=render;render()}
 
 /* ---------- nowe danie ---------- */
-function dishForm(cb,{from=null}={}){
-  const st={sk:from?db.skladniki.filter(x=>x.danie_id===from.id).map(x=>({produkt_id:String(x.produkt_id),gramy:num(x.gramy)})):[]};
-  const base=from?baseOfDish(from):'';
-  const ov=sheet(from?'Ugotuj ponownie':'Nowe danie',`
+function dishForm(cb,{from=null,edit=null}={}){
+  const src=edit||from;
+  const st={sk:src?db.skladniki.filter(x=>x.danie_id===src.id).map(x=>({produkt_id:String(x.produkt_id),gramy:num(x.gramy)})):[]};
+  const base=src?baseOfDish(src):'';
+  const ov=sheet(edit?'Edytuj danie':from?'Ugotuj ponownie':'Nowe danie',`
     ${from?`<p class="muted" style="margin:0">Nowa wersja „${esc(base)}” – gramatury z poprzedniego razu, popraw to, co się zmieniło.</p>`:''}
-    <label>Nazwa dania *<input id="n" value="${esc(base)}" placeholder="np. Leczo"></label>
-    <label>Na ile porcji?<input id="p" inputmode="decimal" value="${from?num(from.porcje)||1:1}"></label>
+    ${edit?`<p class="muted" style="margin:0">Poprawiasz wersję „${esc(edit.nazwa)}”. Wpisy w dzienniku z tej wersji przeliczą się.</p>`:''}
+    <label>Nazwa dania *<input id="n" value="${esc(edit?edit.nazwa:base)}" placeholder="np. Leczo"${edit?' readonly style="opacity:.6"':''}></label>
+    <label>Na ile porcji?<input id="p" inputmode="decimal" value="${src?num(src.porcje)||1:1}"></label>
     <div class="lbl">Składniki</div><div id="sk"></div>
     <button class="btn ghost" id="add" style="width:100%">+ Dodaj składnik</button>
     <div class="lbl">Po ugotowaniu (opcjonalnie – można uzupełnić później)</div>
-    <div class="grid2"><label>Waga gotowego dania (g)<input id="wg" inputmode="decimal" placeholder="np. 1650"></label><label>Naczynie<span>${tareSel('wt')}</span></label></div>
+    <div class="grid2"><label>Waga gotowego dania (g)<input id="wg" inputmode="decimal" placeholder="np. 1650" value="${edit&&num(edit.waga_gotowa)>0?r1(num(edit.waga_gotowa)):''}"></label><label>Naczynie<span>${tareSel('wt')}</span></label></div>
     <div id="sum"></div>
-    <button class="btn primary big" id="ok">Zapisz danie</button>`,{full:true});
+    <button class="btn primary big" id="ok">${edit?'Zapisz zmiany':'Zapisz danie'}</button>`,{full:true});
   const pIn=$(ov,'#p'),wgIn=$(ov,'#wg'),wt=$(ov,'#wt');
   const cooked=()=>{const g=num(wgIn.value);return g>0?Math.max(0,g-tareOf(wt)):0};
   function upd(){let W=0;const t={kcal:0,bialko:0,tluszcz:0,wegle:0};
@@ -746,6 +748,11 @@ function dishForm(cb,{from=null}={}){
     const ins=ov.querySelectorAll('#sk input');const last=ins[ins.length-1];if(last){last.focus();last.select()}}});
   $(ov,'#ok').onclick=()=>{
     const nm=$(ov,'#n').value.trim();if(!nm)return toast('Podaj nazwę dania');
+    if(edit&&st.sk.length){const d={...edit,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),waga_gotowa:cooked()?r1(cooked()):''};
+      const sk=st.sk.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
+      const i=db.dania.findIndex(x=>x.id===d.id);if(i>=0)db.dania[i]=d;db.skladniki=db.skladniki.filter(x=>x.danie_id!==d.id).concat(sk);saveDb();
+      enqueue('editDish',{danie:d,skladniki:sk});Object.keys(dayCache).forEach(backfill);renderDay();
+      ov.close();toast('Danie zaktualizowane');cb&&cb(asItem(d,'danie'));return}
     if(!st.sk.length)return toast('Dodaj co najmniej jeden składnik');
     const today_=today(),again=from||db.dania.some(d=>norm(baseOfDish(d))===norm(nm));
     let full=again?`${nm} (${dSuffix(today_)})`:nm;
@@ -785,6 +792,7 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       ${sk.map(s=>{const p=prodIdx.get(String(s.produkt_id))||GEN_BY_ID.get(String(s.produkt_id));return `<label class="ck"><input type="checkbox"><span class="nm"><b>${esc(p?p.nazwa:'?')}</b><small>${esc(p&&p.marka||'')}</small></span><span class="k">${Math.round(num(s.gramy)*mult)} g</span></label>`}).join('')}
       <button class="btn primary big" id="ag">🔁 Ugotuj ponownie</button>
       <div class="row2"><button class="btn big" id="wc">⚖ Waga po ugotowaniu</button><button class="btn big" id="ad">+ Do dziennika</button></div>
+      <button class="btn big" id="ed">✎ Edytuj składniki / gramatury</button>
       <button class="btn ghost big" id="rn">✎ Zmień nazwę dania</button>
       <button class="btn ghost big" id="zj">${d.status==='zjedzone'?'↩ Przywróć wersję':'✓ Oznacz wersję jako zjedzoną'}</button>`;
     ov.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ov.close();dishDetail(vs,+b.dataset.v,refresh)});
@@ -793,6 +801,7 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       const nvs=db.dania.filter(x=>norm(baseOfDish(x))===norm(baseOfDish(d))).sort((a,b)=>vkey(b).localeCompare(vkey(a)));dishDetail(nvs,0,refresh)},{from:d})};
     $(ov,'#wc').onclick=()=>cookedSheet(d,()=>{const nd=db.dania.find(x=>x.id===d.id);vs[vi]=nd;ov.close();dishDetail(vs,vi,refresh)});
     $(ov,'#ad').onclick=()=>{ov.close();entryForm(asItem(d,'danie'),{})};
+    $(ov,'#ed').onclick=()=>{ov.close();dishForm(nd=>{const i=vs.findIndex(v=>v.id===nd.id);if(i>=0)vs[i]=db.dania.find(x=>x.id===nd.id);refresh&&refresh();dishDetail(vs,vi,refresh)},{edit:d})};
     $(ov,'#rn').onclick=()=>renameDish(vs,()=>{ov.close();refresh&&refresh();const nvs=vs.map(v=>db.dania.find(x=>x.id===v.id)||v);dishDetail(nvs,vi,refresh)});
     $(ov,'#zj').onclick=()=>{const nd={...d,status:d.status==='zjedzone'?'':'zjedzone'};saveDish(nd);vs[vi]=nd;ov.close();refresh&&refresh();dishDetail(vs,vi,refresh)}}
   render()}

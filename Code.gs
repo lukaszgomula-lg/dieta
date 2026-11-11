@@ -111,6 +111,16 @@ function doPost(e) {
           }
           break;
         case 'updateDish': upsert_('Dania', d); break;
+        case 'editDish': {
+          upsert_('Dania', d.danie);
+          const sh = sheet_('Skladniki_dan'), n = sh.getLastRow();
+          if (n >= 2) {
+            const ids = sh.getRange(2, 1, n - 1, 1).getValues();
+            for (let i = ids.length - 1; i >= 0; i--) if (String(ids[i][0]) === String(d.danie.id)) sh.deleteRow(i + 2);
+          }
+          d.skladniki.forEach(function (x) { append_('Skladniki_dan', x); });
+          break;
+        }
         case 'renameDish': renameDish_(d); break;
         case 'addEntry':
         case 'updateEntry': upsert_('Dziennik', d); break;
