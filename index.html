@@ -302,13 +302,16 @@ const extraTxt=m=>`Błonnik ${fv(m.blonnik)} g · Cukry ${fv(m.cukry)} g · Sól
 
 /* ---------- komunikacja z arkuszem ---------- */
 async function apiGet(params){const q=new URLSearchParams({...params,token:cfg.token});const r=await fetch(cfg.url+'?'+q);const j=await r.json();if(j.error)throw new Error(j.error);return j}
-async function apiPost(action,data){const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:cfg.token,action,data})});const j=await r.json();if(j.error)throw new Error(j.error);return j}
+async function apiPost(action,data){const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:cfg.token,action,data})});const j=await r.json();if(j.error){const er=new Error(j.error);er.server=true;throw er};return j}
 
 function setSync(){const b=$$('#sync');b.textContent=queue.length?`⟳ ${queue.length}`:'✓';b.classList.toggle('pending',!!queue.length)}
 function enqueue(action,data){queue.push({action,data});LS.set('queue',queue);setSync();flush()}
 let flushing=false;
 async function flush(){if(flushing||!cfg.url)return;flushing=true;
-  try{while(queue.length){try{await apiPost(queue[0].action,queue[0].data);lastErr=''}catch(e){lastErr=e.message;break}queue.shift();LS.set('queue',queue)}}
+  /* zapis odrzucony przez skrypt (np. „Nieznana akcja” przy starszej wersji) nie blokuje pozostałych – zostaje w kolejce */
+  try{let i=0;while(i<queue.length){const op=queue[i];
+    try{await apiPost(op.action,op.data);queue.splice(i,1);LS.set('queue',queue);if(i===0)lastErr=''}
+    catch(e){lastErr=e.message;if(!e.server)break;i++}}}
   finally{flushing=false;setSync()}}
 
 async function refreshDb(){
