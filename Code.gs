@@ -26,7 +26,7 @@ const SCHEMA = {
     cols: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'ilosc_g', 'kcal', 'bialko', 'tluszcz', 'wegle', 'dodano', 'zmieniono',
       'nasycone', 'cukry', 'blonnik', 'sol',
       'wit_d_ug', 'b12_ug', 'zelazo_mg', 'wapn_mg', 'magnez_mg', 'cynk_mg', 'potas_mg', 'foliany_ug', 'epa_dha_mg', 'mikro_zrodlo', 'jod_ug', 'woda_g', 'plyn_ml', 'alkohol_g',
-      'grupa_id', 'danie_nazwa', 'grupa_szt'],
+      'grupa_id', 'danie_nazwa', 'grupa_szt', 'grupa_udzial', 'grupa_gotowe_g', 'grupa_porcja_g'],
     text: ['id', 'data', 'godzina', 'pora', 'typ', 'ref_id', 'nazwa', 'dodano', 'zmieniono', 'mikro_zrodlo', 'grupa_id', 'danie_nazwa']
   },
   /* jeden wiersz na dzień: zamkniety = TAK, gdy wszystkie posiłki są wpisane */

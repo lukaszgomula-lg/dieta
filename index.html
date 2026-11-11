@@ -426,7 +426,7 @@ function bindSupl(){const d=curDate,plan=planFor(d);
 const rowE=(e,cls='')=>`<button class="entry${cls}" data-id="${esc(e.id)}"><span class="nm"><b>${esc(e.nazwa)}</b><small>${r1(num(e.ilosc_g))} g · ${esc(e.godzina)}</small></span><span class="k">${Math.round(num(e.kcal))} kcal</span></button>`;
 function itemsHTML(es){const seen=new Set();return es.map(e=>{const g=e.grupa_id;if(!g)return rowE(e);if(seen.has(g))return'';seen.add(g);
   const ge=es.filter(x=>x.grupa_id===g),kc=ge.reduce((a,x)=>a+num(x.kcal),0),open=!!grpOpen[g],szt=num(ge[0].grupa_szt),w=ge.reduce((a,x)=>a+num(x.ilosc_g),0);
-  return `<button class="grp" data-g="${esc(g)}"><span class="chev">${open?'▾':'▸'}</span><span class="nm"><b>🍽 ${esc(baseName(ge[0].danie_nazwa))}</b><small>${szt>0?fv(szt)+' szt. · ':''}${ge.length} skł. · ${Math.round(w)} g · ${esc(ge[0].godzina)}</small></span><span class="k">${Math.round(kc)} kcal</span></button>`
+  return `<button class="grp" data-g="${esc(g)}"><span class="chev">${open?'▾':'▸'}</span><span class="nm"><b>🍽 ${esc(baseName(ge[0].danie_nazwa))}</b><small>${szt>0?fv(szt)+' szt. · ':''}${num(ge[0].grupa_udzial)>0&&num(ge[0].grupa_udzial)<1?`moja porcja ${Math.round(num(ge[0].grupa_porcja_g))} g z ${Math.round(num(ge[0].grupa_gotowe_g))} g · `:''}${ge.length} skł. · ${esc(ge[0].godzina)}</small></span><span class="k">${Math.round(kc)} kcal</span></button>`
     +(open?ge.map(x=>rowE(x,' sub')).join('')+`<div class="grp-act"><button class="btn ghost" data-gadd="${esc(g)}">+ Składnik</button><button class="btn ghost" data-gedit="${esc(g)}">✎ Danie</button></div>`:'')}).join('')}
 function renderDay(){
   const t=today();
@@ -467,7 +467,7 @@ function renderDay(){
   document.querySelectorAll('.grp').forEach(b=>b.onclick=()=>{const g=b.dataset.g;grpOpen[g]=!grpOpen[g];if(!grpOpen[g])delete grpOpen[g];LS.set('grpOpen',grpOpen);renderDay()});
   document.querySelectorAll('[data-gedit]').forEach(b=>b.onclick=()=>{const ge=list.filter(x=>x.grupa_id===b.dataset.gedit);if(ge.length)groupForm(ge,true)});
   document.querySelectorAll('[data-gadd]').forEach(b=>b.onclick=()=>{const ge=list.filter(x=>x.grupa_id===b.dataset.gadd);if(!ge.length)return;
-    const g0=ge[0];openPicker({mode:'entry',onPick:it=>entryForm(it,{pora:g0.pora,grupa:{id:g0.grupa_id,base:baseName(g0.danie_nazwa),szt:g0.grupa_szt,godzina:g0.godzina}})})});
+    const g0=ge[0];openPicker({mode:'entry',onPick:it=>entryForm(it,{pora:g0.pora,grupa:{id:g0.grupa_id,base:baseName(g0.danie_nazwa),szt:g0.grupa_szt,godzina:g0.godzina,udzial:g0.grupa_udzial,gotowe:g0.grupa_gotowe_g,porcja:g0.grupa_porcja_g}})})});
   document.querySelectorAll('.entry').forEach(b=>{let tmr=null,lp=false;
     const cancel=()=>{clearTimeout(tmr);tmr=null};
     b.addEventListener('touchstart',()=>{lp=false;tmr=setTimeout(()=>{lp=true;if(navigator.vibrate)navigator.vibrate(30);batchSheet(list,[b.dataset.id],'Zaznacz pozycje')},500)},{passive:true});
@@ -526,6 +526,10 @@ function groupForm(ents,edit){
     <label>Nazwa dania *<input id="gn" list="gnl" value="${esc(edit?baseName(g0.danie_nazwa):'')}" placeholder="np. Tortilla z tofu" autocomplete="off"></label>
     <datalist id="gnl">${groupNames().map(n=>`<option value="${esc(n)}">`).join('')}</datalist>
     <label>Ile sztuk / porcji (opcjonalnie)<input id="gs" inputmode="decimal" value="${edit&&num(g0.grupa_szt)>0?fv(num(g0.grupa_szt)):''}" placeholder="np. 2"></label>
+    <div class="lbl">Ugotowane więcej, zjadłem część? (opcjonalnie)</div>
+    <div class="grid2"><label>Całe danie po ugotowaniu (g)<input id="gc" inputmode="decimal" value="${edit&&num(g0.grupa_gotowe_g)>0?r1(num(g0.grupa_gotowe_g)):''}" placeholder="np. 820"></label><label>Naczynie<span>${tareSel('gct')}</span></label>
+      <label>Moja porcja (g)<input id="gp" inputmode="decimal" value="${edit&&num(g0.grupa_porcja_g)>0?r1(num(g0.grupa_porcja_g)):''}" placeholder="np. 480"></label><label>Talerz / naczynie<span>${tareSel('gpt')}</span></label></div>
+    <p class="hint" id="gh" style="text-align:left"></p>
     <p class="muted">W arkuszu zapisze się z datą, np. „… (${dSuffix(g0.data)})”.${edit?'':' Wszystkie składniki dostaną wspólną porę i godzinę.'}</p>
     <button class="btn primary big" id="ok">${edit?'Zapisz':'Połącz w danie'}</button>
     ${edit?`<button class="btn big" id="tm">🕒 Zmień godzinę / porę dania</button>
@@ -533,30 +537,42 @@ function groupForm(ents,edit){
     <button class="btn ghost big danger" id="un">Rozłącz (zostaw składniki)</button>`:''}`);
   const nameIn=$(ov,'#gn');if(!edit)setTimeout(()=>nameIn.focus(),250);
   const apply=(fn)=>{ents.forEach(e=>{const u=fn({...e});u.zmieniono=isoNow();upsertLocal(u);enqueue('updateEntry',u)})};
+  /* porcja z większego garnka: składniki skalowane do mojej części (udział = porcja / całość po ugotowaniu) */
+  const U=e=>num(e.grupa_udzial)>0?num(e.grupa_udzial):1;
+  const full=ents.reduce((a,e)=>a+num(e.ilosc_g)/U(e),0),fullKc=ents.reduce((a,e)=>a+num(e.kcal)/U(e),0);
+  const gcN=()=>{const v=num($(ov,'#gc').value);return v>0?Math.max(0,v-tareOf($(ov,'#gct'))):0},gpN=()=>{const v=num($(ov,'#gp').value);return v>0?Math.max(0,v-tareOf($(ov,'#gpt'))):0};
+  const share=()=>{const c=gcN(),p=gpN();if(!c&&!p)return 1;if(!c||!p)return null;return Math.min(1,p/c)};
+  const gh=()=>{const f=share(),c=gcN(),p=gpN();$(ov,'#gh').textContent=f==null?'Podaj obie wagi (całe danie i porcja).':f===1&&!c?`Całe danie: składniki ${Math.round(full)} g · ${Math.round(fullKc)} kcal`
+    :`Twoja porcja ${Math.round(p)} g z ${Math.round(c)} g = ${Math.round(f*100)}% · składniki ${Math.round(full*f)} z ${Math.round(full)} g · ${Math.round(fullKc*f)} kcal`};
+  ['#gc','#gp'].forEach(x=>$(ov,x).oninput=gh);['#gct','#gpt'].forEach(x=>$(ov,x).onchange=gh);gh();
+  const scaleTo=(u,f)=>{const r=f/U(u);if(Math.abs(r-1)>1e-6){u.ilosc_g=r1(num(u.ilosc_g)*r);ALLK.forEach(k=>{const v=val(u[k]);if(v!=null)u[k]=rk(k,v*r)})}
+    u.grupa_udzial=f<1?Math.round(f*10000)/10000:'';u.grupa_gotowe_g=f<1?r1(gcN()):'';u.grupa_porcja_g=f<1?r1(gpN()):'';return u};
   $(ov,'#ok').onclick=()=>{const nm=nameIn.value.trim();if(!nm)return toast('Podaj nazwę dania');
+    const f=share();if(f==null)return toast('Podaj obie wagi albo żadną');
     const sz=num($(ov,'#gs').value),szt=sz>0?r1(sz):'';
     LS.set('grpNames',[nm,...LS.get('grpNames',[]).filter(x=>x!==nm)].slice(0,40));
-    if(edit){apply(u=>{u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;return u})}
+    if(edit){apply(u=>{u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;return scaleTo(u,f)})}
     else{const gid=uid(),srt=ents.slice().sort((a,b)=>String(a.godzina).localeCompare(String(b.godzina))),t0=srt[0].godzina;
       const cnt={};ents.forEach(e=>cnt[e.pora]=(cnt[e.pora]||0)+1);const pora=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0];
-      apply(u=>{u.grupa_id=gid;u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;u.godzina=t0;u.pora=pora;return u});
+      apply(u=>{u.grupa_id=gid;u.danie_nazwa=`${nm} (${dSuffix(u.data)})`;u.grupa_szt=szt;u.godzina=t0;u.pora=pora;return scaleTo(u,f)});
       collapsed[pora]=false;LS.set('collapsed',collapsed)}
     ov.close();renderDay();toast(edit?'Zapisano':'Połączono w danie')};
   if(!edit)return;
   $(ov,'#tm').onclick=()=>{ov.close();batchSheet(ents,ents.map(e=>e.id),baseName(g0.danie_nazwa)+' – godzina')};
   $(ov,'#un').onclick=()=>{if(!confirm('Rozłączyć danie? Składniki zostaną jako osobne pozycje.'))return;
-    apply(u=>{u.grupa_id='';u.danie_nazwa='';u.grupa_szt='';return u});ov.close();renderDay();toast('Rozłączono')};
+    apply(u=>{u.grupa_id='';u.danie_nazwa='';u.grupa_szt='';u.grupa_udzial='';u.grupa_gotowe_g='';u.grupa_porcja_g='';return u});ov.close();renderDay();toast('Rozłączono')};
   $(ov,'#sv').onclick=()=>{const nm=nameIn.value.trim()||baseName(g0.danie_nazwa);
     /* składniki będące daniami rozkładamy na ich produkty w odpowiedniej proporcji */
     const acc=new Map();const addP=(pid,g)=>acc.set(String(pid),(acc.get(String(pid))||0)+g);let miss=0;
-    ents.forEach(e=>{const g=num(e.ilosc_g);if(e.typ==='produkt')return addP(e.ref_id,g);
+    ents.forEach(e=>{const g=num(e.ilosc_g)/U(e);if(e.typ==='produkt')return addP(e.ref_id,g);
       const sk0=db.skladniki.filter(x=>String(x.danie_id)===String(e.ref_id)),W=sk0.reduce((a,x)=>a+num(x.gramy),0);
       if(!W){miss++;return}sk0.forEach(x=>addP(x.produkt_id,num(x.gramy)*g/W))});
     if(!acc.size)return toast('Brak składników do zapisania');
     const exists=db.dania.some(d=>norm(d.nazwa)===norm(nm));const dn=exists?`${nm} (${dSuffix(g0.data)})`:nm;
     const sz=num($(ov,'#gs').value);
     const sk=[...acc].map(([pid,g])=>({danie_id:'',produkt_id:pid,gramy:r1(g)}));
-    const d={id:uid(),nazwa:dn,porcje:sz>0?r1(sz):1,waga_g:r1(sk.reduce((a,x)=>a+x.gramy,0)),dodano:isoNow()};sk.forEach(x=>x.danie_id=d.id);
+    const gw=num(g0.grupa_gotowe_g);
+    const d={id:uid(),nazwa:dn,porcje:sz>0?r1(sz):1,waga_g:r1(sk.reduce((a,x)=>a+x.gramy,0)),dodano:isoNow(),baza:nm,wersja:g0.data,waga_gotowa:gw>0?r1(gw):'',status:''};sk.forEach(x=>x.danie_id=d.id);
     db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
     toast(`Zapisano danie „${dn}” · ${Math.round(d.waga_g)} g${miss?' (pominięto '+miss+' nieznane danie)':''}`)}}
 
@@ -913,8 +929,11 @@ function entryForm(item,{entry=null,pora=null,grupa=null}={}){
   $(ov,'#d').onchange=e=>{st.data=e.target.value};
   $(ov,'#ok').onclick=()=>{
     if(st.g<=0)return toast('Podaj ilość');if(!st.data||!st.godz)return toast('Podaj datę i godzinę');
-    const m=calc(base,st.g);
-    const e={id:edit?entry.id:uid(),data:st.data,godzina:st.godz,pora:st.pora,typ,ref_id:String(edit?entry.ref_id:item.id),nazwa,ilosc_g:r1(st.g),
+    const udz=!edit&&grupa&&num(grupa.udzial)>0&&num(grupa.udzial)<1?num(grupa.udzial):1;
+    const m=calc(base,st.g*udz);
+    if(udz<1)toast(`Dodano ${r1(st.g*udz)} g – Twoja część (${Math.round(udz*100)}%)`);
+    const e={id:edit?entry.id:uid(),data:st.data,godzina:st.godz,pora:st.pora,typ,ref_id:String(edit?entry.ref_id:item.id),nazwa,ilosc_g:r1(st.g*udz),
+      grupa_udzial:edit?(entry.grupa_udzial??''):(udz<1?udz:''),grupa_gotowe_g:edit?(entry.grupa_gotowe_g??''):(grupa?grupa.gotowe??'':''),grupa_porcja_g:edit?(entry.grupa_porcja_g??''):(grupa?grupa.porcja??'':''),
       dodano:edit?entry.dodano:isoNow(),zmieniono:edit?isoNow():'',mikro_zrodlo:m._mz||'',
       grupa_id:edit?(entry.grupa_id||''):(grupa?grupa.id:''),grupa_szt:edit?(entry.grupa_szt??''):(grupa?grupa.szt??'':''),
       danie_nazwa:edit?(entry.grupa_id?`${baseName(entry.danie_nazwa)} (${dSuffix(st.data)})`:''):(grupa?`${grupa.base} (${dSuffix(st.data)})`:'')};
