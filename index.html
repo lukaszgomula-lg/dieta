@@ -336,7 +336,7 @@ function applyQueue(list,d){queue.forEach(op=>{const e=op.data;
 
 async function loadDay(){renderDay();if(!cfg.url)return;const d=curDate;
   try{const j=await apiGet({action:'day',date:d});
-    let list=j.entries.map(e=>({...e,id:String(e.id),godzina:String(e.godzina),ilosc_g:num(e.ilosc_g),kcal:num(e.kcal),bialko:num(e.bialko),tluszcz:num(e.tluszcz),wegle:num(e.wegle)}));
+    let list=j.entries.map(e=>({...e,id:String(e.id),godzina:String(e.godzina),ilosc_g:num(e.ilosc_g),kcal:val(e.kcal)??'',bialko:val(e.bialko)??'',tluszcz:val(e.tluszcz)??'',wegle:val(e.wegle)??''}));
     dayCache[d]=applyQueue(list,d);saveDays();
     if(j.v>=3){storeCele(j.cele);if(j.cel)storeCele([j.cel])}
     if(j.v>=4){if(j.supl){suplData=j.supl;LS.set('supl',suplData)}let sl=(j.suplLog||[]).map(x=>({...x,id:String(x.id)}));
