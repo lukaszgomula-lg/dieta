@@ -577,7 +577,8 @@ function groupForm(ents,edit){
     /* składniki będące daniami rozkładamy na ich produkty w odpowiedniej proporcji */
     const acc=new Map();const addP=(pid,g)=>acc.set(String(pid),(acc.get(String(pid))||0)+g);let miss=0;
     ents.forEach(e=>{const g=num(e.ilosc_g)/U(e);if(e.typ==='produkt')return addP(e.ref_id,g);
-      const sk0=db.skladniki.filter(x=>String(x.danie_id)===String(e.ref_id)),W=sk0.reduce((a,x)=>a+num(x.gramy),0);
+      /* proporcja liczona od wagi GOTOWEGO dania (np. 489 g ugotowanego makaronu = 245 g suchego), nie od sumy surowych składników */
+      const sk0=db.skladniki.filter(x=>String(x.danie_id)===String(e.ref_id)),nd=db.dania.find(x=>String(x.id)===String(e.ref_id)),W=nd?dishWeight(nd):sk0.reduce((a,x)=>a+num(x.gramy),0);
       if(!W){miss++;return}sk0.forEach(x=>addP(x.produkt_id,num(x.gramy)*g/W))});
     if(!acc.size)return toast('Brak składników do zapisania');
     const exists=db.dania.some(d=>norm(d.nazwa)===norm(nm));const dn=exists?`${nm} (${dSuffix(g0.data)})`:nm;
