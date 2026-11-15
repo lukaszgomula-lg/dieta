@@ -601,7 +601,7 @@ function sheet(title,body,{full=false}={}){
 function openAdd(pora){openPicker({mode:'entry',onPick:it=>entryForm(it,{pora})})}
 function openPicker({mode,onPick}){
   const ov=sheet(mode==='entry'?'Dodaj do dziennika':'Dodaj składnik',`
-    <div class="search"><input id="q" placeholder="Szukaj${mode==='entry'?' produktu lub dania':' produktu'}…" autocomplete="off"><button class="btn" id="scan">▥ Skanuj</button></div>
+    <div class="search"><input id="q" placeholder="Szukaj${mode==='entry'||mode==='ingredientD'?' produktu lub dania':' produktu'}…" autocomplete="off"><button class="btn" id="scan">▥ Skanuj</button></div>
     <div id="list"></div>
     <div class="row2" style="margin-top:12px"><button class="btn ghost" id="newP">+ Nowy produkt</button>${mode==='entry'?'<button class="btn ghost" id="newD">+ Nowe danie</button>':''}</div>`,{full:true});
   const q=$(ov,'#q'),list=$(ov,'#list');
@@ -609,11 +609,11 @@ function openPicker({mode,onPick}){
   const dishPool=()=>{const by={};db.dania.forEach(d=>{(by[norm(baseOfDish(d))]=by[norm(baseOfDish(d))]||[]).push(d)});
     return Object.values(by).flatMap(vs=>{vs.sort((a,b)=>vkey(b).localeCompare(vkey(a)));
       const act=vs.filter(d=>d.status!=='zjedzone');return (act.length?act:[vs[0]]).map(d=>asItem(d,'danie'))})};
-  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'?dishPool():[])];
+  const pool=()=>[...db.produkty.map(p=>asItem(p,'produkt')),...GEN.filter(g=>!prodIdx.has(g.id)).map(g=>asItem(g,'produkt')),...(mode==='entry'||mode==='ingredientD'?dishPool():[])];
   const sub=it=>{const b=it.typ==='danie'?(isCooked(it)?`${COOK} Ugotowane · zostało ${Math.round(cookedLeft(it))} g`:'Danie'):it.zrodlo==='baza ogólna'?'Baza ogólna':esc(it.marka||'Mój produkt');
     return it.typ!=='danie'&&num(it.porcja_g)>0?`${b} · ${esc(it.porcja_nazwa||'porcja')} = ${r1(num(it.porcja_g))} g`:b};
   function render(){const s=norm(q.value).trim();let items,head='';
-    if(!s){items=recent.map(r=>findItem(r.typ,r.id)).filter(it=>it&&(mode==='entry'||it.typ==='produkt'));
+    if(!s){items=recent.map(r=>findItem(r.typ,r.id)).filter(it=>it&&(mode==='entry'||mode==='ingredientD'||it.typ==='produkt'));
       head=items.length?'<div class="lbl">Ostatnio używane</div>':'<p class="muted">Zacznij pisać albo zeskanuj kod kreskowy.</p>'}
     else{const w=s.split(/\s+/);items=pool().filter(it=>{const h=norm(it.nazwa+' '+(it.marka||''));return w.every(x=>h.includes(x))})
       .sort((a,b)=>(a.typ==='danie'&&b.typ==='danie'&&norm(baseOfDish(a))===norm(baseOfDish(b))?vkey(b).localeCompare(vkey(a)):0)||(norm(b.nazwa).startsWith(w[0])-norm(a.nazwa).startsWith(w[0]))||((a.zrodlo==='baza ogólna')-(b.zrodlo==='baza ogólna'))||a.nazwa.localeCompare(b.nazwa,'pl'));
@@ -734,6 +734,10 @@ function dishForm(cb,{from=null,edit=null}={}){
   const src=edit||from;
   const st={sk:src?db.skladniki.filter(x=>x.danie_id===src.id).map(x=>({produkt_id:String(x.produkt_id),gramy:num(x.gramy)})):[]};
   const base=src?baseOfDish(src):'';
+  const ingr=s=>s.danie?db.dania.find(x=>String(x.id)===String(s.produkt_id)):prodIdx.get(s.produkt_id);
+  /* składniki-dania (np. ugotowany seitan) zapisujemy jako ich produkty; waga gotowa domyślnie = suma wpisanych składników */
+  const finalSk=()=>mergeSk(st.sk.flatMap(s=>s.danie?expandDish(s.produkt_id,s.gramy):[{produkt_id:s.produkt_id,gramy:s.gramy}]));
+  const hasDish=()=>st.sk.some(s=>s.danie),entered=()=>st.sk.reduce((a,s)=>a+s.gramy,0);
   const ov=sheet(edit?'Edytuj danie':from?'Ugotuj ponownie':'Nowe danie',`
     ${from?`<p class="muted" style="margin:0">Nowa wersja „${esc(base)}” – gramatury z poprzedniego razu, popraw to, co się zmieniło.</p>`:''}
     ${edit?`<p class="muted" style="margin:0">Poprawiasz wersję „${esc(edit.nazwa)}”. Wpisy w dzienniku z tej wersji przeliczą się.</p>`:''}
@@ -748,21 +752,21 @@ function dishForm(cb,{from=null,edit=null}={}){
   const pIn=$(ov,'#p'),wgIn=$(ov,'#wg'),wt=$(ov,'#wt');
   const cooked=()=>{const g=num(wgIn.value);return g>0?Math.max(0,g-tareOf(wt)):0};
   function upd(){let W=0;const t={kcal:0,bialko:0,tluszcz:0,wegle:0};
-    st.sk.forEach(s=>{const p=prodIdx.get(s.produkt_id);W+=s.gramy;if(!p)return;const m=calc(per100(asItem(p,'produkt')),s.gramy);for(const k in t)t[k]+=m[k]||0});
+    st.sk.forEach(s=>{const p=ingr(s);W+=s.gramy;if(!p)return;const m=calc(per100(asItem(p,s.danie?'danie':'produkt')),s.gramy);for(const k in t)t[k]+=m[k]||0});
     const n=num(pIn.value)||1,Wc=cooked()||W,por={kcal:Math.round(t.kcal/n),bialko:r1(t.bialko/n),tluszcz:r1(t.tluszcz/n),wegle:r1(t.wegle/n)};
     $(ov,'#sum').innerHTML=st.sk.length?`<div class="lbl">Jedna porcja · ${Math.round(Wc/n)} g${cooked()?` (składniki ${Math.round(W)} g → gotowe ${Math.round(Wc)} g)`:''}</div><div class="macbox" style="margin-top:0">${macHTML(por)}</div>`:''}
   function render(){
-    $(ov,'#sk').innerHTML=st.sk.length?st.sk.map((s,i)=>{const p=prodIdx.get(s.produkt_id);return `<div class="skrow"><span class="nm">${esc(p?p.nazwa:'?')}</span><input inputmode="decimal" data-i="${i}" value="${s.gramy}"><span class="muted">g</span><button class="icon" data-rm="${i}" aria-label="Usuń">✕</button></div>`}).join(''):'<p class="muted">Dodaj składniki z gramaturą.</p>';
+    $(ov,'#sk').innerHTML=st.sk.length?st.sk.map((s,i)=>{const p=ingr(s);return `<div class="skrow"><span class="nm">${s.danie?'🍲 ':''}${esc(p?p.nazwa:'?')}</span><input inputmode="decimal" data-i="${i}" value="${s.gramy}"><span class="muted">g</span><button class="icon" data-rm="${i}" aria-label="Usuń">✕</button></div>`}).join(''):'<p class="muted">Dodaj składniki z gramaturą.</p>';
     ov.querySelectorAll('#sk input').forEach(x=>x.oninput=()=>{st.sk[+x.dataset.i].gramy=num(x.value);upd()});
     ov.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{st.sk.splice(+b.dataset.rm,1);render()});
     upd()}
   pIn.oninput=upd;wgIn.oninput=upd;wt.onchange=upd;
-  $(ov,'#add').onclick=()=>openPicker({mode:'ingredient',onPick:it=>{st.sk.push({produkt_id:String(it.id),gramy:100});render();
+  $(ov,'#add').onclick=()=>openPicker({mode:'ingredientD',onPick:it=>{st.sk.push({produkt_id:String(it.id),gramy:it.typ==='danie'?Math.round(dishWeight(it))||100:100,danie:it.typ==='danie'});render();
     const ins=ov.querySelectorAll('#sk input');const last=ins[ins.length-1];if(last){last.focus();last.select()}}});
   $(ov,'#ok').onclick=()=>{
     const nm=$(ov,'#n').value.trim();if(!nm)return toast('Podaj nazwę dania');
-    if(edit&&st.sk.length){const d={...edit,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),waga_gotowa:cooked()?r1(cooked()):''};
-      const sk=st.sk.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
+    if(edit&&st.sk.length){const fs=finalSk();const d={...edit,porcje:num(pIn.value)||1,waga_g:r1(fs.reduce((a,s)=>a+s.gramy,0)),waga_gotowa:cooked()?r1(cooked()):(hasDish()?r1(entered()):'')};
+      const sk=fs.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
       const i=db.dania.findIndex(x=>x.id===d.id);if(i>=0)db.dania[i]=d;db.skladniki=db.skladniki.filter(x=>x.danie_id!==d.id).concat(sk);saveDb();
       enqueue('editDish',{danie:d,skladniki:sk});Object.keys(dayCache).forEach(backfill);renderDay();
       ov.close();toast('Danie zaktualizowane');cb&&cb(asItem(d,'danie'));return}
@@ -770,9 +774,10 @@ function dishForm(cb,{from=null,edit=null}={}){
     const today_=today(),again=from||db.dania.some(d=>norm(baseOfDish(d))===norm(nm));
     let full=again?`${nm} (${dSuffix(today_)})`:nm;
     for(let k=2;db.dania.some(x=>x.nazwa===full);k++)full=`${nm} (${dSuffix(today_)} ${String.fromCharCode(96+k)})`;
-    const d={id:uid(),nazwa:full,porcje:num(pIn.value)||1,waga_g:r1(st.sk.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow(),
-      baza:nm,wersja:today_,waga_gotowa:cooked()?r1(cooked()):'',status:''};
-    const sk=st.sk.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
+    const fs=finalSk();
+    const d={id:uid(),nazwa:full,porcje:num(pIn.value)||1,waga_g:r1(fs.reduce((a,s)=>a+s.gramy,0)),dodano:isoNow(),
+      baza:nm,wersja:today_,waga_gotowa:cooked()?r1(cooked()):(hasDish()?r1(entered()):''),status:''};
+    const sk=fs.map(s=>({danie_id:d.id,produkt_id:s.produkt_id,gramy:s.gramy}));
     db.dania.push(d);db.skladniki.push(...sk);saveDb();enqueue('addDish',{danie:d,skladniki:sk});
     ov.close();toast('Danie zapisane');cb&&cb(asItem(d,'danie'))};
   render()}
@@ -806,6 +811,7 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       <button class="btn primary big" id="ag">🔁 Ugotuj ponownie</button>
       <div class="row2"><button class="btn big" id="wc">⚖ Waga po ugotowaniu</button><button class="btn big" id="ad">+ Do dziennika</button></div>
       <button class="btn big" id="ed">✎ Edytuj składniki / gramatury</button>
+      <button class="btn big" id="ck2">${COOK} Ugotuj to danie (np. w bulionie)</button>
       <button class="btn ghost big" id="rn">✎ Zmień nazwę dania</button>
       <button class="btn ghost big" id="zj">${d.status==='zjedzone'?'↩ Przywróć wersję':'✓ Oznacz wersję jako zjedzoną'}</button>`;
     ov.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{ov.close();dishDetail(vs,+b.dataset.v,refresh)});
@@ -814,6 +820,7 @@ function dishDetail(vs,vi,refresh){const d=vs[vi];let mult=1;
       const nvs=db.dania.filter(x=>norm(baseOfDish(x))===norm(baseOfDish(d))).sort((a,b)=>vkey(b).localeCompare(vkey(a)));dishDetail(nvs,0,refresh)},{from:d})};
     $(ov,'#wc').onclick=()=>cookedSheet(d,()=>{const nd=db.dania.find(x=>x.id===d.id);vs[vi]=nd;ov.close();dishDetail(vs,vi,refresh)});
     $(ov,'#ad').onclick=()=>{ov.close();entryForm(asItem(d,'danie'),{})};
+    $(ov,'#ck2').onclick=()=>{ov.close();cookForm(asItem(d,'danie'),{after:()=>{refresh&&refresh();toast('Zapisano ugotowane')}})};
     $(ov,'#ed').onclick=()=>{ov.close();dishForm(nd=>{const i=vs.findIndex(v=>v.id===nd.id);if(i>=0)vs[i]=db.dania.find(x=>x.id===nd.id);refresh&&refresh();dishDetail(vs,vi,refresh)},{edit:d})};
     $(ov,'#rn').onclick=()=>renameDish(vs,()=>{ov.close();refresh&&refresh();const nvs=vs.map(v=>db.dania.find(x=>x.id===v.id)||v);dishDetail(nvs,vi,refresh)});
     $(ov,'#zj').onclick=()=>{const nd={...d,status:d.status==='zjedzone'?'':'zjedzone'};saveDish(nd);vs[vi]=nd;ov.close();refresh&&refresh();dishDetail(vs,vi,refresh)}}
@@ -847,6 +854,10 @@ function cookedSheet(dish,after){const W=rawWeight(dish);
 /* ---------- ♨ ugotuj produkt (kasza, ryż, makaron, warzywa) ----------
    W produkt wchodzi taka część wywaru, jaką część płynu wchłonął: udział = (waga po ugotowaniu − suchy) / (woda + inne płyny).
    Sól i dodatki z wywaru zapisują się jako składniki partii w tej proporcji; wchłonięta woda liczy się do wody łącznie. */
+/* danie użyte jako składnik → jego produkty w proporcji do wagi GOTOWEGO dania */
+function expandDish(id,g){const d=db.dania.find(x=>String(x.id)===String(id));if(!d)return[];const W=dishWeight(d);if(!(W>0))return[];
+  return db.skladniki.filter(x=>String(x.danie_id)===String(d.id)).map(x=>({produkt_id:String(x.produkt_id),gramy:num(x.gramy)*g/W}))}
+function mergeSk(arr){const m=new Map();arr.forEach(x=>m.set(String(x.produkt_id),(m.get(String(x.produkt_id))||0)+x.gramy));return[...m].map(([produkt_id,g])=>({produkt_id,gramy:Math.round(g*100)/100})).filter(x=>x.gramy>0)}
 function cookedProd(d){const s=db.skladniki.find(x=>String(x.danie_id)===String(d.id));return s?findItem('produkt',s.produkt_id):null}
 function cookForm(prod,{pora=null,after=null}={}){
   const pid=String(prod.id),SALT=GEN.find(g=>g.nazwa==='Sól kuchenna').id,prefs=LS.get('cook',{}),pp=prefs[pid]||{},last=prefs._last||{};
@@ -854,7 +865,7 @@ function cookForm(prod,{pora=null,after=null}={}){
   const st={ex:(pp.ex||[]).filter(x=>prodIdx.has(String(x.produkt_id))||GEN_BY_ID.has(String(x.produkt_id)))};
   const ov=sheet(COOK+' Ugotuj',`
     <p class="muted" style="margin:0"><b>${esc(prod.nazwa)}</b> – wpisz, co wrzuciłeś do garnka i ile waży po ugotowaniu. Aplikacja policzy, ile wywaru weszło w produkt.</p>
-    <div class="grid2"><label>Suchy produkt (g)<input id="dry" inputmode="decimal" value="${r1(num(pp.dry)||num(prod.porcja_g)||100)}"></label><label>Woda (ml)<input id="wd" inputmode="decimal" value="${r1(num(pp.woda??last.woda)||1000)}"></label></div>
+    <div class="grid2"><label>${prod.typ==='danie'?'Ile dania do garnka (g)':'Suchy produkt (g)'}<input id="dry" inputmode="decimal" value="${r1(num(pp.dry)||num(prod.porcja_g)||(prod.typ==='danie'?Math.round(dishWeight(prod)):0)||100)}"></label><label>Woda (ml)<input id="wd" inputmode="decimal" value="${r1(num(pp.woda??last.woda)||1000)}"></label></div>
     <label>Sól (g) <small class="muted">· płaska łyżeczka ≈ 6 g</small><input id="sl" inputmode="decimal" value="${r1(num(pp.sol??last.sol??5))}"></label>
     <div class="lbl">Inne do wywaru (bulion, kostka, przyprawy)</div><div id="ex"></div>
     <button class="btn ghost" id="add" style="width:100%">+ Dodaj do wywaru</button>
@@ -866,9 +877,9 @@ function cookForm(prod,{pora=null,after=null}={}){
   const pOf=id=>prodIdx.get(String(id))||GEN_BY_ID.get(String(id));
   function model(){const dry=num(dryIn.value),wod=num(wdIn.value),sol=num(slIn.value),Wc=Math.max(0,num(wg.value)-tareOf(wt));
     const liq=wod+st.ex.reduce((a,x)=>a+x.gramy,0),abs=Math.max(0,Wc-dry),f=Wc>0?(liq>0?Math.min(1,abs/liq):1):0;
-    const sk=[{produkt_id:pid,gramy:r1(dry)}];if(sol>0)sk.push({produkt_id:SALT,gramy:r2(sol*f)});
+    const sk=prod.typ==='danie'?expandDish(prod.id,dry):[{produkt_id:pid,gramy:r1(dry)}];if(sol>0)sk.push({produkt_id:SALT,gramy:r2(sol*f)});
     st.ex.forEach(x=>sk.push({produkt_id:String(x.produkt_id),gramy:r2(x.gramy*f)}));
-    return {dry,wod,sol,Wc,liq,abs,f,sk:sk.filter(x=>x.gramy>0)}}
+    return {dry,wod,sol,Wc,liq,abs,f,sk:mergeSk(sk)}}
   function upd(){const m=model();
     $(ov,'#h').textContent=m.Wc>0?(m.Wc<m.dry?'Waga po ugotowaniu mniejsza niż suchy produkt – sprawdź naczynie / wagę.'
       :`netto ${Math.round(m.Wc)} g · wchłonięte ${Math.round(m.abs)} ml z ${Math.round(m.liq)} ml wywaru (${Math.round(m.f*100)}%) · sól w produkcie ${fv(r2(m.sol*m.f))} g`):'Zważ po ugotowaniu (bez wody, która została w garnku).';
@@ -888,7 +899,7 @@ function cookForm(prod,{pora=null,after=null}={}){
     if(!(m.dry>0))return toast('Podaj wagę suchego produktu');if(!(m.Wc>0))return toast('Podaj wagę po ugotowaniu');
     if(m.Wc<m.dry&&!confirm('Waga po ugotowaniu mniejsza niż suchy produkt – zapisać mimo to?'))return;
     if(m.sol>0)ensureProduct(asItem(GEN_BY_ID.get(SALT),'produkt'));
-    const nm=`${cookBase(prod.nazwa)} ${COOK}`,today_=today();let full=`${nm} (${dSuffix(today_)})`;
+    const nm=`${cookBase(prod.typ==='danie'?baseOfDish(prod):prod.nazwa)} ${COOK}`,today_=today();let full=`${nm} (${dSuffix(today_)})`;
     for(let k=2;db.dania.some(x=>x.nazwa===full);k++)full=`${nm} (${dSuffix(today_)} ${String.fromCharCode(96+k)})`;
     const d={id:uid(),nazwa:full,porcje:1,waga_g:r1(m.sk.reduce((a,x)=>a+x.gramy,0)),dodano:isoNow(),baza:nm,wersja:today_,waga_gotowa:r1(m.Wc),status:''};
     const sk=m.sk.map(x=>({danie_id:d.id,produkt_id:x.produkt_id,gramy:x.gramy}));
@@ -921,7 +932,7 @@ function entryForm(item,{entry=null,pora=null,grupa=null}={}){
     <div class="hero"><b>${esc(nazwa)}</b><small>${cooked?`${COOK} Ugotowane · zostało ${Math.round(left)} g z ${Math.round(dishWeight(dish))} g`:typ==='danie'?'Danie'+(porcja?` · porcja ${Math.round(porcja)} g`:''):(unit?`Produkt · ${esc(unit.n)} = ${r1(unit.g)} g`:'Produkt')}</small>
       ${typ==='produkt'&&item?'<br><button class="btn ghost" id="ep" style="font-size:13px;padding:6px 12px;margin-top:6px">✎ Edytuj produkt / porcję</button>'+(edit?'':' <button class="btn ghost" id="ck" style="font-size:13px;padding:6px 12px;margin-top:6px">'+COOK+' Ugotuj</button>'):''}
       ${dish?`${num(dish.waga_gotowa)>0?'':'<br><small style="color:var(--warn)">Brak wagi po ugotowaniu – liczę wagę składników</small>'}
-        <div class="chips c" style="margin-top:8px">${cooked?'':'<button class="chip" id="dc">⚖ Waga po ugotowaniu</button>'}<button class="chip" id="dr">🔁 Ugotuj ponownie</button><button class="chip" id="dz">${dish.status==='zjedzone'?'↩ Przywróć':'✓ Zjedzone'}</button></div>`:''}</div>
+        <div class="chips c" style="margin-top:8px">${cooked?'':'<button class="chip" id="dc">⚖ Waga po ugotowaniu</button>'}<button class="chip" id="dr">🔁 Ugotuj ponownie</button><button class="chip" id="dk">${COOK} Ugotuj</button><button class="chip" id="dz">${dish.status==='zjedzone'?'↩ Przywróć':'✓ Zjedzone'}</button></div>`:''}</div>
     <div class="amount"><input id="g" inputmode="decimal" value="${r1(st.g)}" aria-label="Ilość w gramach"><span>g</span></div>
     <div class="hint" id="ph"></div>
     ${naczynia.length?`<div style="display:flex;justify-content:center;margin-top:6px">${tareSel('tw')}</div>`:''}
@@ -944,6 +955,7 @@ function entryForm(item,{entry=null,pora=null,grupa=null}={}){
   const ck=$(ov,'#ck');if(ck)ck.onclick=()=>{ov.close();ensureProduct(item);cookForm(item,{pora:st.pora})};
   if(dish){const dc=$(ov,'#dc');if(dc)dc.onclick=()=>{ov.close();cookedSheet(dish,()=>entryForm(findItem('danie',dish.id),{entry,pora:st.pora,grupa}))};
     $(ov,'#dr').onclick=()=>{ov.close();const cp=cooked&&cookedProd(dish);if(cp)cookForm(cp,{after:nd=>entryForm(nd,{pora:st.pora,grupa})});else dishForm(nd=>entryForm(nd,{pora:st.pora,grupa}),{from:dish})};
+    $(ov,'#dk').onclick=()=>{ov.close();cookForm(dish,{pora:st.pora})};
     $(ov,'#dz').onclick=()=>{ov.close();saveDish({...dish,status:dish.status==='zjedzone'?'':'zjedzone'});toast(dish.status==='zjedzone'?'Przywrócono':'Oznaczono jako zjedzone')}}
   ov.querySelectorAll('#qk .chip').forEach(b=>b.onclick=()=>{st.g=+b.dataset.g;gi.value=st.g;if(twSel)twSel.value='';upd()});
   ov.querySelectorAll('#pr .chip').forEach(b=>b.onclick=()=>{poraTouched=true;setPora(b.dataset.p)});
