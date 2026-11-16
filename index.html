@@ -391,7 +391,8 @@ function saveSupl(){const lim=addDays(today(),-60);for(const d in suplLog)if(d<l
 function dayKind(d){const c=celeCache[d];if(!c||!c.typ_dnia)return null;const t=norm(c.typ_dnia);return t.includes('tren')&&!t.includes('nietren')?'T':'NT'}
 function planFor(d){const kind=dayKind(d);
   return (suplData.plan||[]).filter(p=>String(p.aktywny).toUpperCase()==='TAK'&&(!p.od||String(p.od)<=d)&&(!p.do||String(p.do)>=d)).map(p=>{const k=norm(p.kiedy||'codziennie');let r;
-    if(k.startsWith('opc'))r='opt';else if(k.startsWith('nietren'))r=kind==='NT'?'req':kind==='T'?null:'opt';else if(k.startsWith('tren'))r=kind==='T'?'req':kind==='NT'?null:'opt';else r='req';
+    if(k.startsWith('co drugi')||k.startsWith('co 2')){const diff=Math.round((parseD(d)-parseD(String(p.od||d)))/864e5);r=diff%2===0?'req':null}
+    else if(k.startsWith('opc'))r='opt';else if(k.startsWith('nietren'))r=kind==='NT'?'req':kind==='T'?null:'opt';else if(k.startsWith('tren'))r=kind==='T'?'req':kind==='NT'?null:'opt';else r='req';
     return r?{...p,_req:r}:null}).filter(Boolean)}
 const suplProd=id=>(suplData.produkty||[]).find(x=>String(x.id)===String(id));
 const logFor=(d,pid)=>(suplLog[d]||[]).find(l=>l.plan_id===pid);
