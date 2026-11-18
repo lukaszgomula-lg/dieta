@@ -56,7 +56,7 @@ main{padding:0 16px calc(110px + env(safe-area-inset-bottom))}
 .meal-t:disabled{cursor:default}
 .meal-t b{font-size:15px}
 .chev{width:14px;color:var(--mut);flex:none;font-size:14px}
-.mac-s{padding:0 16px 10px;font-size:12px;color:var(--mut)}
+.mac-s{padding:6px 16px 10px;font-size:12px;color:var(--mut);display:flex;flex-wrap:wrap;column-gap:14px;row-gap:2px}.mac-s .hz{color:var(--mut)}
 .ck{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 6px;color:var(--fg);font-size:15px}
 input[type=checkbox]{display:inline-block;width:22px;height:22px;margin:0;padding:0;flex:none;accent-color:var(--acc)}
 .btn:disabled{opacity:.45}
@@ -461,6 +461,9 @@ function renderDay(){
   const CH=celeCache[curDate];
   const X=k=>{let s=0,miss=0;list.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null)miss++;else s+=v});return (miss&&list.length?'≥':'')+fv(s)};
   $$('#sum').innerHTML=`<div class="sum hsec">${goalHTML(CH,{...T,wd:S('woda_g'),pl:S('plyn_ml'),al:S('alkohol_g')})}</div>`;
+  /* zdrowie w posiłku: N nasycone, S sól, Bł błonnik (g), F foliany (µg); ≈ gdy części produktów brak danych */
+  const Xm=(es,k,int)=>{let t=0,miss=0;es.forEach(e=>{let v=val(e[k]);if(v==null){const it=findItem(e.typ,e.ref_id);if(it&&num(e.ilosc_g)>0)v=calc(per100(it),num(e.ilosc_g))[k]}if(v==null){if(num(e.kcal)>0)miss++}else t+=v});
+    return (miss?'≈':'')+(int?Math.round(t):String(Math.round(t*10)/10).replace('.',','))};
   const pory=[...PORY,...new Set(list.map(e=>e.pora).filter(p=>!PORY.includes(p)))];
   $$('#meals').innerHTML=pory.map(p=>{const es=list.filter(e=>e.pora===p),n=es.length,c=n&&isCollapsed(p),S=sum(es);
     const ts=[...new Set(es.map(e=>String(e.godzina)))].sort(),tm=ts.length>1?ts[0]+'–'+ts[ts.length-1]:(ts[0]||'');
@@ -468,7 +471,7 @@ function renderDay(){
       <button class="meal-t" data-tog="${esc(p)}"${n?'':' disabled'}><span class="chev">${n?(c?'▸':'▾'):''}</span><span class="nm"><b>${esc(p)}</b>${n?`<small>${esc(tm)} · ${n} poz. · ${Math.round(S.kcal)} kcal</small>`:''}</span></button>
       ${n?`<button class="icon" data-time="${esc(p)}" aria-label="Godzina posiłku: ${esc(p)}">🕒</button>`:''}
       <button class="icon add-s" data-add="${esc(p)}" aria-label="Dodaj do: ${esc(p)}">+</button></div>
-    ${n&&!c?`<div class="mac-s"><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></div>`+itemsHTML(es):''}</section>`}).join('')
+    ${n&&!c?`<div class="mac-s"><span><span class="cB">B ${r1(S.b)}</span> · <span class="cT">T ${r1(S.t)}</span> · <span class="cW">W ${r1(S.w)}</span></span><span class="hz">N ${Xm(es,'nasycone')} · S ${Xm(es,'sol')} · Bł ${Xm(es,'blonnik')} · F ${Xm(es,'foliany_ug',1)}</span></div>`+itemsHTML(es):''}</section>`}).join('')
     +suplHTML(curDate)
     +(()=>{const h=healthHTML(CH,list);return h?`<section class="meal hsec">${h}</section>`:''})()
     +(list.length>1?'<button class="btn ghost" id="multi" style="width:100%;margin-top:4px">☑ Zaznacz kilka pozycji</button>':'')
