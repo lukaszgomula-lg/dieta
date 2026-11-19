@@ -78,6 +78,7 @@ select.tare{font:inherit;font-size:14px;padding:10px;border:1px solid var(--line
 .sup.on .ck2{background:var(--acc);border-color:var(--acc)}
 .sup.skip .ck2{border-color:var(--warn);color:var(--warn)}
 .sup.on .nm b{color:var(--mut)}
+.sup .k.tm{padding:6px 8px;margin:-6px -8px;border-radius:8px;background:var(--acc2);white-space:nowrap}
 .slbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:10px 16px 4px}
 .nm{flex:1;min-width:0}
 .nm b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -408,11 +409,11 @@ function suplHTML(d){const plan=planFor(d),log=suplLog[d]||[];if(!plan.length&&!
   const req=plan.filter(p=>p._req==='req'),done=req.filter(p=>{const l=logFor(d,p.id);return l&&l.status==='przyjete'}).length,c=isCollapsed('__supl');
   const row=p=>{const l=logFor(d,p.id),on=l&&l.status==='przyjete',sk=l&&l.status==='pominiete',pr=suplProd(p.produkt_id);
     const sub=[[p.dawka,p.jedn].filter(Boolean).join(' '),p.dawka_skladnika,pr&&pr.nazwa&&pr.nazwa!==p.nazwa?pr.nazwa+(pr.marka?' ('+pr.marka+')':''):''].filter(Boolean).join(' · ');
-    return `<button class="sup${on?' on':''}${sk?' skip':''}" data-sp="${esc(p.id)}"><span class="ck2">${on?'✓':sk?'–':''}</span><span class="nm"><b>${esc(p.nazwa||p.skladnik)}</b><small>${esc(sub)}${p.uwagi?' · '+esc(p.uwagi):''}</small></span><span class="k">${on?esc(l.godzina):sk?'pominięte':''}</span></button>`};
+    return `<button class="sup${on?' on':''}${sk?' skip':''}" data-sp="${esc(p.id)}"><span class="ck2">${on?'✓':sk?'–':''}</span><span class="nm"><b>${esc(p.nazwa||p.skladnik)}</b><small>${esc(sub)}${p.uwagi?' · '+esc(p.uwagi):''}</small></span><span class="k${on||sk?' tm':''}">${on?'🕒 '+esc(l.godzina):sk?'pominięte':''}</span></button>`};
   let body='';const gs=[...PORY_S,...new Set(req.map(p=>p.pora).filter(x=>x&&!PORY_S.includes(x)))];
   gs.forEach(g=>{const ps=req.filter(p=>(p.pora||'dowolnie')===g);if(ps.length)body+=`<div class="slbl">${esc(g)}</div>`+ps.map(row).join('')});
   const opt=plan.filter(p=>p._req==='opt');if(opt.length)body+=`<div class="slbl">opcjonalnie${dayKind(d)?'':' / bez celu dnia'}</div>`+opt.map(row).join('');
-  const ex=log.filter(l=>!l.plan_id);if(ex.length)body+='<div class="slbl">poza planem</div>'+ex.map(l=>`<button class="sup on" data-sx="${esc(l.id)}"><span class="ck2">✓</span><span class="nm"><b>${esc(l.nazwa)}</b><small>${esc([l.dawka,l.jedn].filter(Boolean).join(' '))}</small></span><span class="k">${esc(l.godzina)}</span></button>`).join('');
+  const ex=log.filter(l=>!l.plan_id);if(ex.length)body+='<div class="slbl">poza planem</div>'+ex.map(l=>`<button class="sup on" data-sx="${esc(l.id)}"><span class="ck2">✓</span><span class="nm"><b>${esc(l.nazwa)}</b><small>${esc([l.dawka,l.jedn].filter(Boolean).join(' '))}</small></span><span class="k tm">🕒 ${esc(l.godzina)}</span></button>`).join('');
   if(!plan.length)body+='<p class="muted" style="margin:8px 16px">Brak aktywnego planu na ten dzień – ustala go trener.</p>';
   body+='<div class="grp-act" style="padding-left:16px;background:none"><button class="btn ghost" id="supX">+ Spoza planu</button></div>';
   return `<section class="meal"><div class="meal-h"><button class="meal-t" data-tog="__supl"><span class="chev">${c?'▸':'▾'}</span><span class="nm"><b>💊 Suplementy i leki</b><small>${req.length?`${done}/${req.length} przyjęte`:'brak pozycji obowiązkowych'}</small></span></button></div>${c?'':body}</section>`}
@@ -435,9 +436,13 @@ function bindSupl(){const d=curDate,plan=planFor(d);
     b.addEventListener('touchstart',()=>{lp=false;tmr=setTimeout(()=>{lp=true;if(navigator.vibrate)navigator.vibrate(30);suplItemSheet(d,p)},500)},{passive:true});
     b.addEventListener('touchmove',cancel,{passive:true});b.addEventListener('touchend',cancel);b.addEventListener('touchcancel',cancel);
     b.addEventListener('contextmenu',e=>{e.preventDefault();suplItemSheet(d,p)});
-    b.onclick=()=>{if(lp){lp=false;return}const l=logFor(d,p.id);
+    b.onclick=ev=>{if(lp){lp=false;return}const l=logFor(d,p.id);
+      if(l&&ev.target.closest('.k.tm')){suplItemSheet(d,p);return}
       if(l&&l.status==='przyjete')dropSupl(d,l.id);else{putSupl(suplRec(d,p,'przyjete',nowHM()));if(navigator.vibrate)navigator.vibrate(20)}renderDay()}});
-  document.querySelectorAll('[data-sx]').forEach(b=>b.onclick=()=>{if(confirm('Usunąć ten wpis?')){dropSupl(d,b.dataset.sx);renderDay()}});
+  document.querySelectorAll('[data-sx]').forEach(b=>b.onclick=()=>{const l=(suplLog[d]||[]).find(x=>x.id===b.dataset.sx);if(!l)return;
+    const ov=sheet(l.nazwa,`<label>Godzina przyjęcia<input type="time" id="st" value="${esc(l.godzina||nowHM())}"></label><button class="btn primary big" id="ok">Zapisz</button><button class="btn ghost big danger" id="rm">Usuń wpis</button>`);
+    $(ov,'#ok').onclick=()=>{putSupl({...l,godzina:$(ov,'#st').value||l.godzina,zapisano:isoNow()});ov.close();renderDay()};
+    $(ov,'#rm').onclick=()=>{dropSupl(d,l.id);ov.close();renderDay()}});
   const x=$$('#supX');if(x)x.onclick=()=>suplExtraSheet(d)}
 
 /* ---------- widok dnia ---------- */
